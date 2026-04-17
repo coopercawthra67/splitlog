@@ -1,5 +1,3 @@
-/*    /index.html   200
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -209,12 +207,17 @@ async function pgWorkouts(){
 }
 
 async function pgAthletes(){
-  const {data:aths}=await db.from('profiles').select('*,workout_athletes(workout_id),splits(id),group_members(groups(*))').eq('role','athlete')
+  const {data:aths}=await db.from('profiles').select('*').eq('role','athlete')
+  if(!aths?.length) return`<div class="page-title" style="margin-bottom:24px">Athletes</div><p class="empty">No athletes yet. Add them via Supabase Authentication.</p>`
+  // get workout counts and split counts separately
+  const {data:waRows}=await db.from('workout_athletes').select('athlete_id,workout_id')
+  const {data:spRows}=await db.from('splits').select('athlete_id')
+  const {data:gmRows}=await db.from('group_members').select('athlete_id,groups(*)')
   const cards=(aths||[]).map(a=>{
-    const wc=new Set(a.workout_athletes?.map(x=>x.workout_id)).size
-    const rc=a.splits?.length||0
-    const grps=a.group_members?.map(gm=>gm.groups).filter(Boolean)||[]
-    return`<div class="card" style="cursor:pointer" onclick="go('search')">
+    const wc=new Set((waRows||[]).filter(r=>r.athlete_id===a.id).map(r=>r.workout_id)).size
+    const rc=(spRows||[]).filter(r=>r.athlete_id===a.id).length
+    const grps=(gmRows||[]).filter(r=>r.athlete_id===a.id).map(r=>r.groups).filter(Boolean)
+    return`<div class="card" style="cursor:pointer" onclick="APP.filters.aid='${a.id}';go('search')">
       <div class="row" style="margin-bottom:14px">${av(a,44)}<div style="margin-left:12px">
         <div style="font-weight:600;font-size:15px;margin-bottom:5px">${esc(a.name)}</div>
         <div class="row" style="flex-wrap:wrap;gap:4px">${grps.map(g=>`<span class="badge" style="background:${g.color||'#3ecfff'}20;color:${g.color||'#3ecfff'};font-size:10px">${esc(g.name)}</span>`).join('')}</div>
@@ -222,7 +225,7 @@ async function pgAthletes(){
       <div class="grid2" style="gap:8px">${[['Workouts',wc],['Total Reps',rc]].map(([l,v])=>`<div style="background:#1c1f27;border-radius:8px;padding:8px 12px"><div style="font-size:10px;color:#4b5563;margin-bottom:3px;text-transform:uppercase">${l}</div><div class="mono" style="font-size:24px;color:${a.color||'#c8ff3e'}">${v}</div></div>`).join('')}
       </div></div>`
   }).join('')
-  return`<div class="page-title" style="margin-bottom:24px">Athletes</div><div class="grid2" style="gap:14px">${cards||'<p class="empty">No athletes yet.</p>'}</div>`
+  return`<div class="page-title" style="margin-bottom:24px">Athletes</div><div class="grid2" style="gap:14px">${cards}</div>`
 }
 
 async function pgGroups(){
@@ -548,6 +551,7 @@ async function createGroup(){
   const {data:g}=await db.from('groups').insert({name,description:desc,coach_id:APP.profile.id,color:'#3ecfff'}).select().single()
   if(g&&selIds.length) await db.from('group_members').insert(selIds.map(id=>({group_id:g.id,athlete_id:id})))
   document.getElementById('create-group-modal')?.remove()
+  APP.tab='groups'
   render()
 }
 
