@@ -169,6 +169,8 @@ function bindLogin(){
     const {data:prof}=await db.from('profiles').select('*').eq('id',data.user.id).single()
     APP.profile=prof
     APP.tab=prof?.role==='coach'?'dashboard':'myworkouts'
+    // Save coach password temporarily so session can be restored after adding athletes
+    if(prof?.role==='coach') sessionStorage.setItem('_cp',pw)
     render()
   }
   document.getElementById('btn-login').onclick=doLogin
@@ -666,7 +668,11 @@ function showAddAthlete(){
     </div>
     <div style="margin-bottom:14px"><label class="lbl">Full Name</label><input id="na-name" type="text" placeholder="e.g. Elise Smoot" autofocus></div>
     <div style="margin-bottom:14px"><label class="lbl">Email</label><input id="na-email" type="email" placeholder="elise@email.com"></div>
-    <div style="margin-bottom:14px"><label class="lbl">Password</label><input id="na-pw" type="password" placeholder="Set a temporary password"></div>
+    <div style="margin-bottom:20px">
+      <div style="background:#0d1a00;border:1px solid #1a2600;border-radius:8px;padding:12px;font-size:13px;color:#4b7a00;line-height:1.6">
+        ✉️ They will receive an email with a link to set their own password and access SplitLog.
+      </div>
+    </div>
     <div style="margin-bottom:20px"><label class="lbl">Avatar Color</label>
       <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:6px">
         ${COLORS.map(c=>`<div class="color-pick" data-color="${c}" onclick="pickColor('${c}')" style="width:32px;height:32px;border-radius:50%;background:${c};cursor:pointer;border:3px solid ${c===randomColor?'#fff':'transparent'};transition:border .15s"></div>`).join('')}
@@ -676,7 +682,7 @@ function showAddAthlete(){
     <div id="na-err" style="display:none;color:#ff6b6b;font-size:13px;background:#2b0d0d;padding:8px 12px;border-radius:6px;margin-bottom:12px"></div>
     <div class="row" style="justify-content:flex-end;gap:10px">
       <button class="ghost" onclick="document.getElementById('add-athlete-modal').remove()">Cancel</button>
-      <button class="btn" id="na-btn" onclick="addAthlete()">Add Athlete</button>
+      <button class="btn" id="na-btn" onclick="addAthlete()">Send Invite</button>
     </div>
   </div>`
   document.body.appendChild(modal)
@@ -693,32 +699,52 @@ function pickColor(c){
 async function addAthlete(){
   const name=document.getElementById('na-name')?.value.trim()
   const email=document.getElementById('na-email')?.value.trim()
-  const pw=document.getElementById('na-pw')?.value
   const color=document.getElementById('na-color')?.value||'#3ecfff'
   const err=document.getElementById('na-err')
   const btn=document.getElementById('na-btn')
-  if(!name||!email||!pw){if(err){err.textContent='Please fill in all fields.';err.style.display='block'}return}
-  if(pw.length<6){if(err){err.textContent='Password must be at least 6 characters.';err.style.display='block'}return}
-  if(btn){btn.textContent='Adding…';btn.disabled=true}
-  // Create the auth user using admin signup (works because we allow signups)
-  const {data,error}=await db.auth.signUp({
+  if(!name||!email){if(err){err.textContent='Please enter a name and email.';err.style.display='block'}return}
+  if(btn){btn.textContent='Sending…';btn.disabled=true}
+
+  const initials=name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()
+
+  // Use Supabase invite - sends a nice email, athlete sets their own password
+  const {data,error}=await db.auth.signInWithOtp({
     email,
-    password:pw,
-    options:{data:{name,role:'athlete',color,avatar_initials:name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()}}
+    options:{
+      emailRedirectTo:'https://splitlog.netlify.app',
+      data:{name,role:'athlete',color,avatar_initials:initials}
+    }
   })
+
   if(error){
     if(err){err.textContent=error.message;err.style.display='block'}
-    if(btn){btn.textContent='Add Athlete';btn.disabled=false}
+    if(btn){btn.textContent='Send Invite';btn.disabled=false}
     return
   }
-  // Wait a moment for the trigger to create the profile, then update it
-  await new Promise(r=>setTimeout(r,1000))
-  if(data?.user?.id){
-    await db.from('profiles').upsert({id:data.user.id,name,role:'athlete',color,avatar_initials:name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase(),share_enabled:false})
-  }
+
+  // Create the profile right away so they appear on the roster immediately
+  // We use a placeholder id that will be replaced when they confirm
+  const tempId = crypto.randomUUID()
+  await db.from('profiles').insert({
+    id:tempId, name, role:'athlete', color,
+    avatar_initials:initials, share_enabled:false, active:true,
+    pending_email:email
+  }).select()
+
   document.getElementById('add-athlete-modal')?.remove()
-  APP.tab='athletes'
-  render()
+
+  // Show success
+  const successModal=document.createElement('div')
+  successModal.className='overlay'
+  successModal.innerHTML=`<div class="modal" style="max-width:440px;text-align:center" onclick="event.stopPropagation()">
+    <div style="font-size:40px;margin-bottom:16px">✉️</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:8px">Invite sent to ${esc(name)}!</div>
+    <p style="color:#6b7280;font-size:14px;margin-bottom:8px;line-height:1.6">An email has been sent to <strong style="color:#e8e6e0">${esc(email)}</strong>.</p>
+    <p style="color:#6b7280;font-size:14px;margin-bottom:24px;line-height:1.6">They'll click the link, set their own password, and be ready to go.</p>
+    <button class="btn" style="width:100%" onclick="this.closest('.overlay').remove();APP.tab='athletes';render()">Done</button>
+  </div>`
+  document.body.appendChild(successModal)
+  successModal.onclick=e=>{if(e.target===successModal){successModal.remove();APP.tab='athletes';render()}}
 }
 
 // ── REMOVE ATHLETE ──
