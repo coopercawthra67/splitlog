@@ -186,15 +186,46 @@ function closeModal(){APP.modal=null;APP.viewW=null;APP.editW=null;render()}
 async function pgDash(){
   const [{data:ws},{data:aths},{data:gs}]=await Promise.all([
     db.from('workouts').select('*,workout_athletes(athlete_id,profiles(*))').order('date',{ascending:false}).limit(5),
-    db.from('profiles').select('id').eq('role','athlete'),
-    db.from('groups').select('id')
+    db.from('profiles').select('*').eq('role','athlete'),
+    db.from('groups').select('*,group_members(athlete_id)')
   ])
+  const {data:waRows}=await db.from('workout_athletes').select('athlete_id,workout_id')
   const {data:allWs}=await db.from('workouts').select('id,date')
   const mo=new Date().toISOString().slice(0,7)
-  const stats=[{l:'Workouts',v:allWs?.length||0,c:'#c8ff3e'},{l:'Athletes',v:aths?.length||0,c:'#3ecfff'},{l:'Groups',v:gs?.length||0,c:'#ffb347'},{l:'This Month',v:allWs?.filter(w=>w.date?.startsWith(mo)).length||0,c:'#a78bfa'}]
+  const stats=[{l:'Workouts',v:allWs?.length||0,c:'#c8ff3e'},{l:'Athletes',v:(aths||[]).length,c:'#3ecfff'},{l:'Groups',v:(gs||[]).length,c:'#ffb347'},{l:'This Month',v:allWs?.filter(w=>w.date?.startsWith(mo)).length||0,c:'#a78bfa'}]
+
+  // Roster section
+  const rosterRows=(aths||[]).map(a=>{
+    const wc=new Set((waRows||[]).filter(r=>r.athlete_id===a.id).map(r=>r.workout_id)).size
+    const athGroups=(gs||[]).filter(g=>g.group_members?.some(gm=>gm.athlete_id===a.id))
+    const groupBadges=athGroups.map(g=>`<span class="badge" style="background:${g.color||'#3ecfff'}20;color:${g.color||'#3ecfff'};font-size:10px">${esc(g.name)}</span>`).join('')
+    return`<div onclick="APP.filters.aid='${a.id}';go('search')" style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:#13151a;border:1px solid #2a2e3a;border-radius:10px;cursor:pointer;transition:all .15s;margin-bottom:8px" onmouseover="this.style.borderColor='#c8ff3e'" onmouseout="this.style.borderColor='#2a2e3a'">
+      ${av(a,40)}
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:15px;margin-bottom:4px">${esc(a.name)}</div>
+        <div class="row" style="flex-wrap:wrap;gap:6px">${groupBadges||'<span style="font-size:12px;color:#4b5563">No group</span>'}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="mono" style="font-size:18px;color:#c8ff3e">${wc}</div>
+        <div style="font-size:11px;color:#4b5563;margin-top:2px">workouts</div>
+      </div>
+      <div style="color:#4b5563;font-size:18px">›</div>
+    </div>`
+  }).join('')
+
   return`<div class="page-title">Dashboard</div><div class="page-sub">Welcome, ${esc(APP.profile?.name||'Coach')}</div>
   <div class="grid4" style="margin-bottom:32px">${stats.map(s=>`<div class="statcard"><div style="font-size:11px;color:#4b5563;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">${s.l}</div><div class="mono" style="font-size:34px;color:${s.c}">${s.v}</div></div>`).join('')}</div>
-  <div style="font-size:11px;color:#4b5563;margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em">Recent Sessions</div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div style="font-size:11px;color:#4b5563;text-transform:uppercase;letter-spacing:.06em">Roster</div>
+    <button class="ghost sm" onclick="go('athletes')">View all athletes →</button>
+  </div>
+  ${rosterRows||'<p style="color:#4b5563;font-size:14px;margin-bottom:32px">No athletes yet. Go to Athletes → Add Athlete.</p>'}
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;margin-top:28px">
+    <div style="font-size:11px;color:#4b5563;text-transform:uppercase;letter-spacing:.06em">Recent Sessions</div>
+    <button class="ghost sm" onclick="go('workouts')">View all →</button>
+  </div>
   ${(ws||[]).map(w=>wcardHTML(w)).join('')||'<p class="empty">No workouts yet. Hit "+ Log Workout" to get started.</p>'}`
 }
 
