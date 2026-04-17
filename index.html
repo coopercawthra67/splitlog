@@ -208,8 +208,6 @@ async function pgWorkouts(){
 
 async function pgAthletes(){
   const {data:aths}=await db.from('profiles').select('*').eq('role','athlete')
-  if(!aths?.length) return`<div class="page-title" style="margin-bottom:24px">Athletes</div><p class="empty">No athletes yet. Add them via Supabase Authentication.</p>`
-  // get workout counts and split counts separately
   const {data:waRows}=await db.from('workout_athletes').select('athlete_id,workout_id')
   const {data:spRows}=await db.from('splits').select('athlete_id')
   const {data:gmRows}=await db.from('group_members').select('athlete_id,groups(*)')
@@ -225,7 +223,12 @@ async function pgAthletes(){
       <div class="grid2" style="gap:8px">${[['Workouts',wc],['Total Reps',rc]].map(([l,v])=>`<div style="background:#1c1f27;border-radius:8px;padding:8px 12px"><div style="font-size:10px;color:#4b5563;margin-bottom:3px;text-transform:uppercase">${l}</div><div class="mono" style="font-size:24px;color:${a.color||'#c8ff3e'}">${v}</div></div>`).join('')}
       </div></div>`
   }).join('')
-  return`<div class="page-title" style="margin-bottom:24px">Athletes</div><div class="grid2" style="gap:14px">${cards}</div>`
+  return`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+      <div><div class="page-title">Athletes</div><div class="page-sub" style="margin-bottom:0">${(aths||[]).length} athletes</div></div>
+      <button class="btn" onclick="showAddAthlete()">+ Add Athlete</button>
+    </div>
+    <div class="grid2" style="gap:14px">${cards||'<p class="empty" style="grid-column:1/-1">No athletes yet. Click "+ Add Athlete" to get started.</p>'}</div>`
 }
 
 async function pgGroups(){
@@ -613,6 +616,75 @@ function bindChips(containerId){
       }
     }
   })
+}
+
+// ── ADD ATHLETE ──
+function showAddAthlete(){
+  const COLORS=['#f472b6','#fb923c','#60a5fa','#34d399','#a78bfa','#fbbf24','#f87171','#3ecfff']
+  const randomColor=COLORS[Math.floor(Math.random()*COLORS.length)]
+  const modal=document.createElement('div')
+  modal.className='overlay'
+  modal.id='add-athlete-modal'
+  modal.innerHTML=`<div class="modal" style="max-width:480px" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;margin-bottom:20px">
+      <span style="font-size:20px;font-weight:800;color:#c8ff3e;font-style:italic">Add Athlete</span>
+      <button class="ghost sm" onclick="document.getElementById('add-athlete-modal').remove()">✕ Close</button>
+    </div>
+    <div style="margin-bottom:14px"><label class="lbl">Full Name</label><input id="na-name" type="text" placeholder="e.g. Elise Smoot" autofocus></div>
+    <div style="margin-bottom:14px"><label class="lbl">Email</label><input id="na-email" type="email" placeholder="elise@email.com"></div>
+    <div style="margin-bottom:14px"><label class="lbl">Password</label><input id="na-pw" type="password" placeholder="Set a temporary password"></div>
+    <div style="margin-bottom:20px"><label class="lbl">Avatar Color</label>
+      <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:6px">
+        ${COLORS.map(c=>`<div class="color-pick" data-color="${c}" onclick="pickColor('${c}')" style="width:32px;height:32px;border-radius:50%;background:${c};cursor:pointer;border:3px solid ${c===randomColor?'#fff':'transparent'};transition:border .15s"></div>`).join('')}
+      </div>
+      <input type="hidden" id="na-color" value="${randomColor}">
+    </div>
+    <div id="na-err" style="display:none;color:#ff6b6b;font-size:13px;background:#2b0d0d;padding:8px 12px;border-radius:6px;margin-bottom:12px"></div>
+    <div class="row" style="justify-content:flex-end;gap:10px">
+      <button class="ghost" onclick="document.getElementById('add-athlete-modal').remove()">Cancel</button>
+      <button class="btn" id="na-btn" onclick="addAthlete()">Add Athlete</button>
+    </div>
+  </div>`
+  document.body.appendChild(modal)
+  modal.onclick=e=>{if(e.target===modal)modal.remove()}
+}
+
+function pickColor(c){
+  document.getElementById('na-color').value=c
+  document.querySelectorAll('.color-pick').forEach(el=>{
+    el.style.border=el.dataset.color===c?'3px solid #fff':'3px solid transparent'
+  })
+}
+
+async function addAthlete(){
+  const name=document.getElementById('na-name')?.value.trim()
+  const email=document.getElementById('na-email')?.value.trim()
+  const pw=document.getElementById('na-pw')?.value
+  const color=document.getElementById('na-color')?.value||'#3ecfff'
+  const err=document.getElementById('na-err')
+  const btn=document.getElementById('na-btn')
+  if(!name||!email||!pw){if(err){err.textContent='Please fill in all fields.';err.style.display='block'}return}
+  if(pw.length<6){if(err){err.textContent='Password must be at least 6 characters.';err.style.display='block'}return}
+  if(btn){btn.textContent='Adding…';btn.disabled=true}
+  // Create the auth user using admin signup (works because we allow signups)
+  const {data,error}=await db.auth.signUp({
+    email,
+    password:pw,
+    options:{data:{name,role:'athlete',color,avatar_initials:name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()}}
+  })
+  if(error){
+    if(err){err.textContent=error.message;err.style.display='block'}
+    if(btn){btn.textContent='Add Athlete';btn.disabled=false}
+    return
+  }
+  // Wait a moment for the trigger to create the profile, then update it
+  await new Promise(r=>setTimeout(r,1000))
+  if(data?.user?.id){
+    await db.from('profiles').upsert({id:data.user.id,name,role:'athlete',color,avatar_initials:name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase(),share_enabled:false})
+  }
+  document.getElementById('add-athlete-modal')?.remove()
+  APP.tab='athletes'
+  render()
 }
 
 // ── BOOT ──
