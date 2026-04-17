@@ -77,6 +77,7 @@ async function render(){
   const isCoach=APP.profile?.role==='coach'
   let page=''
   const t=APP.tab
+  if(t==='setup'||!APP.profile){document.getElementById('app').innerHTML=setupPageHTML();return}
   if(t==='dashboard'&&isCoach) page=await pgDash()
   else if(t==='workouts'&&isCoach) page=await pgWorkouts()
   else if(t==='athletes'&&isCoach) page=await pgAthletes()
@@ -777,18 +778,98 @@ async function removeAthlete(id){
 
 // ── BOOT ──
 async function boot(){
+  // Handle magic link / invite redirect from email
+  const hash=window.location.hash
+  if(hash&&hash.includes('access_token')){
+    document.getElementById('app').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:16px"><div style="font-size:32px">⚡</div><div style="color:#c8ff3e;font-size:16px;font-weight:600">Signing you in…</div></div>'
+    // Supabase picks up the token from the hash automatically
+    await new Promise(r=>setTimeout(r,1500))
+    window.location.hash=''
+  }
+
   const {data:{session}}=await db.auth.getSession()
   if(session){
     APP.user=session.user
     const {data:prof}=await db.from('profiles').select('*').eq('id',session.user.id).single()
-    APP.profile=prof
-    APP.tab=prof?.role==='coach'?'dashboard':'myworkouts'
+    if(prof){
+      APP.profile=prof
+      APP.tab=prof.role==='coach'?'dashboard':'myworkouts'
+    } else {
+      // Profile doesn't exist yet — show a "set up your account" screen
+      APP.user=session.user
+      APP.profile=null
+      APP.tab='setup'
+    }
   }
   render()
-  db.auth.onAuthStateChange((_,session)=>{
-    if(!session){APP.user=null;APP.profile=null;render()}
+
+  db.auth.onAuthStateChange(async(event,session)=>{
+    if(event==='SIGNED_IN'&&session){
+      APP.user=session.user
+      const {data:prof}=await db.from('profiles').select('*').eq('id',session.user.id).single()
+      if(prof){
+        APP.profile=prof
+        APP.tab=prof.role==='coach'?'dashboard':'myworkouts'
+      } else {
+        APP.profile=null
+        APP.tab='setup'
+      }
+      render()
+    } else if(event==='SIGNED_OUT'){
+      APP.user=null;APP.profile=null;render()
+    }
   })
 }
+
+// Show a "finish setting up your account" page for new athletes signing in via magic link
+function setupPageHTML(){
+  return`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div style="width:100%;max-width:400px">
+      <div style="text-align:center;margin-bottom:32px">
+        <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="width:44px;height:44px;background:#c8ff3e;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px">⚡</div>
+          <span style="font-size:30px;font-weight:800;color:#c8ff3e;font-style:italic;letter-spacing:-1px">SplitLog</span>
+        </div>
+        <p style="color:#4b5563;font-size:14px">Welcome! Let's finish setting up your account.</p>
+      </div>
+      <div class="card" style="padding:24px">
+        <div style="margin-bottom:14px"><label class="lbl">Your Name</label><input id="setup-name" type="text" placeholder="e.g. Elise Smoot" autofocus></div>
+        <div style="margin-bottom:20px"><label class="lbl">New Password</label><input id="setup-pw" type="password" placeholder="Choose a password (min 6 characters)"></div>
+        <div id="setup-err" style="display:none;color:#ff6b6b;font-size:13px;background:#2b0d0d;padding:8px 12px;border-radius:6px;margin-bottom:12px"></div>
+        <button class="btn" id="setup-btn" style="width:100%;padding:11px" onclick="finishSetup()">Get Started →</button>
+      </div>
+    </div>
+  </div>`
+}
+
+async function finishSetup(){
+  const name=document.getElementById('setup-name')?.value.trim()
+  const pw=document.getElementById('setup-pw')?.value
+  const err=document.getElementById('setup-err')
+  const btn=document.getElementById('setup-btn')
+  if(!name){if(err){err.textContent='Please enter your name.';err.style.display='block'}return}
+  if(!pw||pw.length<6){if(err){err.textContent='Password must be at least 6 characters.';err.style.display='block'}return}
+  if(btn){btn.textContent='Saving…';btn.disabled=true}
+
+  // Update their password
+  const {error:pwErr}=await db.auth.updateUser({password:pw})
+  if(pwErr){if(err){err.textContent=pwErr.message;err.style.display='block'};if(btn){btn.textContent='Get Started →';btn.disabled=false};return}
+
+  const initials=name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()
+  const colors=['#f472b6','#fb923c','#60a5fa','#34d399','#a78bfa','#fbbf24','#3ecfff']
+  const color=colors[Math.floor(Math.random()*colors.length)]
+
+  // Create their profile
+  const {data:prof}=await db.from('profiles').upsert({
+    id:APP.user.id, name, role:'athlete', color,
+    avatar_initials:initials, share_enabled:false, active:true
+  }).select().single()
+
+  APP.profile=prof
+  APP.tab='myworkouts'
+  render()
+}
+
 boot()
 </script>
 </body>
