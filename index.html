@@ -77,7 +77,7 @@ async function render(){
   const isCoach=APP.profile?.role==='coach'
   let page=''
   const t=APP.tab
-  if(t==='setup'||!APP.profile){document.getElementById('app').innerHTML=setupPageHTML();return}
+  if(t==='setup'||!APP.profile){app.innerHTML=setupPageHTML();return}
   if(t==='dashboard'&&isCoach) page=await pgDash()
   else if(t==='workouts'&&isCoach) page=await pgWorkouts()
   else if(t==='athletes'&&isCoach) page=await pgAthletes()
@@ -778,13 +778,16 @@ async function removeAthlete(id){
 
 // ── BOOT ──
 async function boot(){
-  // Handle magic link / invite redirect from email
+  // Check if this is a magic link redirect (has access_token in URL hash)
   const hash=window.location.hash
-  if(hash&&hash.includes('access_token')){
-    document.getElementById('app').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:16px"><div style="font-size:32px">⚡</div><div style="color:#c8ff3e;font-size:16px;font-weight:600">Signing you in…</div></div>'
-    // Supabase picks up the token from the hash automatically
-    await new Promise(r=>setTimeout(r,1500))
-    window.location.hash=''
+  const isMagicLink=hash&&(hash.includes('access_token')||hash.includes('type=magiclink')||hash.includes('type=signup'))
+
+  if(isMagicLink){
+    // Show a loading screen while Supabase processes the token
+    document.getElementById('app').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:16px"><div style="font-size:32px">⚡</div><div style="color:#c8ff3e;font-size:16px;font-weight:600">Setting up your account…</div></div>'
+    await new Promise(r=>setTimeout(r,2000))
+    // Clear the hash so it doesn't interfere
+    history.replaceState(null,'',window.location.pathname)
   }
 
   const {data:{session}}=await db.auth.getSession()
@@ -794,29 +797,23 @@ async function boot(){
     if(prof){
       APP.profile=prof
       APP.tab=prof.role==='coach'?'dashboard':'myworkouts'
-    } else {
-      // Profile doesn't exist yet — show a "set up your account" screen
-      APP.user=session.user
+    } else if(isMagicLink){
       APP.profile=null
       APP.tab='setup'
     }
   }
   render()
 
+  // Only use onAuthStateChange for sign out — login is handled by doLogin and magic link above
   db.auth.onAuthStateChange(async(event,session)=>{
-    if(event==='SIGNED_IN'&&session){
+    if(event==='SIGNED_OUT'){
+      APP.user=null;APP.profile=null;APP.tab='dashboard';render()
+    } else if(event==='SIGNED_IN'&&isMagicLink&&session){
       APP.user=session.user
       const {data:prof}=await db.from('profiles').select('*').eq('id',session.user.id).single()
-      if(prof){
-        APP.profile=prof
-        APP.tab=prof.role==='coach'?'dashboard':'myworkouts'
-      } else {
-        APP.profile=null
-        APP.tab='setup'
-      }
+      if(prof){APP.profile=prof;APP.tab=prof.role==='coach'?'dashboard':'myworkouts'}
+      else{APP.profile=null;APP.tab='setup'}
       render()
-    } else if(event==='SIGNED_OUT'){
-      APP.user=null;APP.profile=null;render()
     }
   })
 }
