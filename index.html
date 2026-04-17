@@ -4,8 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SplitLog</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script>if(typeof supabase==='undefined'){document.getElementById('app').innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#ff6b6b;font-size:14px">Failed to load. Please refresh the page.</div>'}</script>
+<script>window.onload=function(){var s=document.createElement("script");s.src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js";s.onload=function(){startApp()};s.onerror=function(){var s2=document.createElement("script");s2.src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js";s2.onload=function(){startApp()};s2.onerror=function(){document.getElementById("app").innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#ff6b6b;font-size:14px;text-align:center;padding:20px">Could not connect. Please check your internet connection and refresh.</div>'};document.head.appendChild(s2)};document.head.appendChild(s)}</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0c0f;color:#e8e6e0;min-height:100vh}
@@ -932,7 +931,7 @@ async function finishSetup(){
   render()
 }
 
-boot()
+function startApp(){boot()}
 </script>
 </body>
 </html>
