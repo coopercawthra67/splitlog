@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SplitLog</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>if(typeof supabase==='undefined'){document.getElementById('app').innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#ff6b6b;font-size:14px">Failed to load. Please refresh the page.</div>'}</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0c0f;color:#e8e6e0;min-height:100vh}
@@ -52,7 +53,7 @@ button{cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;border:
 </style>
 </head>
 <body>
-<div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#6b7280">Loading…</div></div>
+<div id="app"><div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:12px"><div style="font-size:32px">⚡</div><div style="color:#6b7280;font-size:14px">Loading SplitLog…</div></div></div>
 <script>
 const SUPA_URL = 'https://abrxnpmqcdeewegvommp.supabase.co'
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFicnhucG1xY2RlZXdlZ3ZvbW1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjgxMDcsImV4cCI6MjA5MTM0NDEwN30.0_0BrbLO7vIOzMOK8QkMsKEjo8jdtE7Cd6AEKTKiPb8'
@@ -844,27 +845,31 @@ async function removeAthlete(id){
 
 // ── BOOT ──
 async function boot(){
-  // Clear any stale hash from magic links without triggering a reload
-  if(window.location.hash&&window.location.hash.includes('access_token')){
-    history.replaceState(null,'',window.location.pathname)
-  }
+  // Always clear hash
+  if(window.location.hash) history.replaceState(null,'',window.location.pathname)
+
+  // Safety timeout — if loading takes more than 3s, just show login
+  const timeout=setTimeout(()=>{
+    APP.user=null;APP.profile=null;render()
+  },3000)
 
   try {
     const {data:{session}}=await db.auth.getSession()
+    clearTimeout(timeout)
     if(session){
       APP.user=session.user
       const {data:prof}=await db.from('profiles').select('*').eq('id',session.user.id).single()
-      if(prof){
+      if(prof&&prof.role){
         APP.profile=prof
         APP.tab=prof.role==='coach'?'dashboard':'myworkouts'
       } else {
-        // Session exists but no profile — clear it and show login
         await db.auth.signOut()
         APP.user=null
         APP.profile=null
       }
     }
   } catch(e){
+    clearTimeout(timeout)
     APP.user=null
     APP.profile=null
   }
