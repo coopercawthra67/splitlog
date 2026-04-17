@@ -844,14 +844,12 @@ async function removeAthlete(id){
 
 // ── BOOT ──
 async function boot(){
-  const hash=window.location.hash
-  const isMagicLink=hash&&hash.includes('access_token')
-
-  if(isMagicLink){
-    document.getElementById('app').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:16px"><div style="font-size:32px">⚡</div><div style="color:#c8ff3e;font-size:16px;font-weight:600">Setting up your account…</div></div>'
-    // Let Supabase process the token from the hash
-    await new Promise(r=>setTimeout(r,2500))
+  // Clear any stale hash from magic links without triggering a reload
+  if(window.location.hash&&window.location.hash.includes('access_token')){
     history.replaceState(null,'',window.location.pathname)
+  }
+
+  try {
     const {data:{session}}=await db.auth.getSession()
     if(session){
       APP.user=session.user
@@ -860,29 +858,17 @@ async function boot(){
         APP.profile=prof
         APP.tab=prof.role==='coach'?'dashboard':'myworkouts'
       } else {
+        // Session exists but no profile — clear it and show login
+        await db.auth.signOut()
+        APP.user=null
         APP.profile=null
-        APP.tab='setup'
       }
     }
-    render()
-    return
+  } catch(e){
+    APP.user=null
+    APP.profile=null
   }
 
-  // Normal boot — no magic link
-  const {data:{session}}=await db.auth.getSession()
-  if(session){
-    APP.user=session.user
-    const {data:prof}=await db.from('profiles').select('*').eq('id',session.user.id).single()
-    if(prof){
-      APP.profile=prof
-      APP.tab=prof.role==='coach'?'dashboard':'myworkouts'
-    } else {
-      // Has auth session but no profile — sign them out and show login
-      await db.auth.signOut()
-      APP.user=null
-      APP.profile=null
-    }
-  }
   render()
 
   db.auth.onAuthStateChange(async(event,session)=>{
