@@ -1,16 +1,631 @@
+/*    /index.html   200
+
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SplitLog</title>
-    <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { background: #0a0c0f; color: #e8e6e0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-    </style>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SplitLog</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0c0f;color:#e8e6e0;min-height:100vh}
+input,textarea,select{background:#1c1f27;border:1px solid #2a2e3a;color:#e8e6e0;border-radius:8px;padding:9px 12px;outline:none;width:100%;font-family:inherit;font-size:14px;transition:border-color .15s}
+input:focus,textarea:focus,select:focus{border-color:#c8ff3e}
+input[type=date]{color-scheme:dark}
+button{cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;border:none;border-radius:8px;padding:9px 18px;transition:all .15s}
+.btn{background:#c8ff3e;color:#0a0c0f}.btn:hover{background:#d9ff6b}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.ghost{background:transparent;color:#e8e6e0;border:1px solid #2a2e3a}.ghost:hover{border-color:#c8ff3e;color:#c8ff3e}
+.sm{padding:5px 12px;font-size:12px}
+.sidebar{position:fixed;top:0;left:0;width:220px;height:100vh;background:#0d0f13;border-right:1px solid #1c1f27;padding:18px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;z-index:50}
+.main{margin-left:220px;padding:32px;min-height:100vh}
+.navitem{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;color:#6b7280;font-size:14px;user-select:none;transition:all .15s}
+.navitem:hover{background:#1c1f27;color:#e8e6e0}
+.navitem.active{background:#1a2600;color:#c8ff3e}
+.card{background:#13151a;border:1px solid #2a2e3a;border-radius:12px;padding:20px}
+.wcard{background:#13151a;border:1px solid #2a2e3a;border-radius:12px;padding:16px 18px;cursor:pointer;margin-bottom:10px;transition:all .15s}
+.wcard:hover{border-color:#c8ff3e;transform:translateY(-1px)}
+.statcard{background:#13151a;border:1px solid #2a2e3a;border-radius:10px;padding:14px 18px}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:200;overflow-y:auto;padding:30px 16px;display:flex;align-items:flex-start;justify-content:center}
+.modal{background:#13151a;border:1px solid #2a2e3a;border-radius:14px;width:100%;max-width:680px;padding:26px;margin:auto}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.row{display:flex;align-items:center;gap:10px}
+.lbl{font-size:11px;color:#6b7280;display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+.badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.ba{background:#1a2600;color:#c8ff3e}.bb{background:#0d1f2b;color:#3ecfff}.bg{background:#0d2b18;color:#4ade80}
+.mono{font-family:'Courier New',monospace;font-weight:700}
+.muted{color:#6b7280;font-size:13px}
+.page-title{font-size:28px;font-weight:800;letter-spacing:-.5px;margin-bottom:4px}
+.page-sub{color:#6b7280;font-size:14px;margin-bottom:24px}
+.empty{text-align:center;padding:48px;color:#4b5563;font-size:14px}
+.av{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
+.toggle{width:38px;height:22px;border-radius:11px;position:relative;cursor:pointer;flex-shrink:0;transition:background .2s}
+.toggle.on{background:#c8ff3e}.toggle.off{background:#2a2e3a}
+.toggle::after{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;top:3px;transition:left .2s}
+.toggle.on::after{left:19px}.toggle.off::after{left:3px}
+.ac-drop{position:absolute;top:100%;left:0;right:0;background:#1c1f27;border:1px solid #c8ff3e;border-radius:8px;z-index:300;max-height:200px;overflow-y:auto;margin-top:2px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.ac-item{padding:10px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #2a2e3a}
+.ac-item:hover{background:#2a2e3a}
+.splitrow{display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid #0a0c0f}
+.splitrow:last-child{border-bottom:none}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:#13151a}::-webkit-scrollbar-thumb{background:#2a2e3a;border-radius:4px}
+</style>
+</head>
+<body>
+<div id="app"><div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#6b7280">Loading…</div></div>
+<script>
+const SUPA_URL = 'https://abrxnpmqcdeewegvommp.supabase.co'
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFicnhucG1xY2RlZXdlZ3ZvbW1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NjgxMDcsImV4cCI6MjA5MTM0NDEwN30.0_0BrbLO7vIOzMOK8QkMsKEjo8jdtE7Cd6AEKTKiPb8'
+const db = supabase.createClient(SUPA_URL, SUPA_KEY)
+
+const WTYPES = ['Track','Road','Trail','Grass','Indoor','Cross Country']
+const SURFS  = ['Rubber','Asphalt','Grass','Gravel','Trail','Turf','Dirt']
+
+let APP = { user: null, profile: null, tab: 'dashboard', modal: null, viewW: null, editW: null, gid: null, filters: {aid:'',df:'',dt:'',type:'',loc:'',q:''}, splitQ: '' }
+
+// ── HELPERS ──
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function fmtDate(d){if(!d)return '';return new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+function wicon(w){const l=(w||'').toLowerCase();if(l.includes('rain'))return'🌧';if(l.includes('cloud')||l.includes('over'))return'☁️';if(l.includes('sun'))return'☀️';if(l.includes('snow'))return'❄️';return'🌤'}
+function av(p,sz){sz=sz||36;const fs=Math.round(sz*.36);const ini=(p?.avatar_initials||p?.name?.split(' ').map(n=>n[0]).join('').slice(0,2)||'?').toUpperCase();const c=p?.color||'#c8ff3e';return `<div class="av" style="width:${sz}px;height:${sz}px;background:${c}22;color:${c};font-size:${fs}px">${esc(ini)}</div>`}
+function bestIdx(reps){let m=Infinity,i=0;reps.forEach((r,j)=>{const v=parseFloat((r.time||'').replace(':','.'))||Infinity;if(v<m){m=v;i=j}});return i}
+
+// ── RENDER ──
+async function render(){
+  const app=document.getElementById('app')
+  if(!APP.user){app.innerHTML=loginHTML();bindLogin();return}
+  const isCoach=APP.profile?.role==='coach'
+  let page=''
+  const t=APP.tab
+  if(t==='dashboard'&&isCoach) page=await pgDash()
+  else if(t==='workouts'&&isCoach) page=await pgWorkouts()
+  else if(t==='athletes'&&isCoach) page=await pgAthletes()
+  else if(t==='groups') page=await pgGroups()
+  else if(t==='search'&&isCoach) page=await pgSearch()
+  else if(t==='myworkouts'&&!isCoach) page=await pgMyWorkouts()
+  else if(t==='mysplits'&&!isCoach) page=await pgMySplits()
+  else if(t==='mygroups'&&!isCoach) page=await pgMyGroups()
+
+  const isC=isCoach
+  const p=APP.profile
+  const ini=(p?.avatar_initials||p?.name?.split(' ').map(n=>n[0]).join('').slice(0,2)||'?').toUpperCase()
+  const color=p?.color||'#c8ff3e'
+  const coachNav=isC?`
+    <div class="navitem ${t==='dashboard'?'active':''}" onclick="go('dashboard')"><span>▪</span><span>Dashboard</span></div>
+    <div class="navitem ${t==='workouts'?'active':''}" onclick="go('workouts')"><span>📋</span><span>All Workouts</span></div>
+    <div class="navitem ${t==='athletes'?'active':''}" onclick="go('athletes')"><span>👥</span><span>Athletes</span></div>
+    <div class="navitem ${t==='groups'?'active':''}" onclick="go('groups')"><span>🏟</span><span>Training Groups</span></div>
+    <div class="navitem ${t==='search'?'active':''}" onclick="go('search')"><span>🔍</span><span>Search & Filter</span></div>
+    <div style="margin-top:auto;padding-top:16px;display:flex;flex-direction:column;gap:8px">
+      <button class="btn" style="width:100%;font-size:13px" onclick="openForm()">+ Log Workout</button>
+      <button class="ghost sm" style="width:100%" onclick="openSplitSearch()">⚡ Split Search</button>
+    </div>`:``
+  const athNav=!isC?`
+    <div class="navitem ${t==='myworkouts'?'active':''}" onclick="go('myworkouts')"><span>🏃</span><span>My Workouts</span></div>
+    <div class="navitem ${t==='mysplits'?'active':''}" onclick="go('mysplits')"><span>⏱</span><span>My Splits</span></div>
+    <div class="navitem ${t==='mygroups'?'active':''}" onclick="go('mygroups')"><span>🏟</span><span>My Groups</span></div>`:``
+
+  let modalHTML=''
+  if(APP.modal==='form') modalHTML=await wformHTML()
+  else if(APP.modal==='detail'&&APP.viewW) modalHTML=await wdetailHTML()
+  else if(APP.modal==='splitsearch') modalHTML=splitSearchHTML()
+
+  app.innerHTML=`
+  <div class="sidebar">
+    <div class="row" style="gap:8px;margin-bottom:20px;padding-left:4px">
+      <div style="width:30px;height:30px;background:#c8ff3e;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:16px">⚡</div>
+      <span style="font-size:20px;font-weight:800;color:#c8ff3e;font-style:italic;letter-spacing:-.5px">SplitLog</span>
+    </div>
+    <div style="background:#1c1f27;border:1px solid #2a2e3a;border-radius:10px;padding:10px 12px;margin-bottom:14px">
+      <div class="row" style="margin-bottom:8px">
+        <div class="av" style="width:32px;height:32px;background:${color}22;color:${color};font-size:11px">${ini}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p?.name||'')}</div>
+          <div style="font-size:11px;color:#4b5563">${isC?'Coach':'Athlete'}</div>
+        </div>
+      </div>
+      <button class="ghost sm" style="width:100%;font-size:11px" onclick="signOut()">Sign out</button>
+    </div>
+    ${coachNav}${athNav}
+  </div>
+  <div class="main">${page}</div>
+  ${modalHTML}`
+  bindAll()
+}
+
+// ── AUTH ──
+function loginHTML(){return`
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div style="width:100%;max-width:400px">
+      <div style="text-align:center;margin-bottom:32px">
+        <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="width:44px;height:44px;background:#c8ff3e;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px">⚡</div>
+          <span style="font-size:30px;font-weight:800;color:#c8ff3e;font-style:italic;letter-spacing:-1px">SplitLog</span>
+        </div>
+        <p style="color:#4b5563;font-size:14px">Track & Field Coaching Platform</p>
+      </div>
+      <div class="card" style="padding:24px">
+        <div style="margin-bottom:14px"><label class="lbl">Email</label><input id="l-email" type="email" placeholder="your@email.com"></div>
+        <div style="margin-bottom:20px"><label class="lbl">Password</label><input id="l-pw" type="password" placeholder="••••••••"></div>
+        <div id="l-err" style="display:none;color:#ff6b6b;font-size:13px;background:#2b0d0d;padding:8px 12px;border-radius:6px;margin-bottom:12px"></div>
+        <button class="btn" id="btn-login" style="width:100%;padding:11px">Sign In →</button>
+        <p style="color:#4b5563;font-size:12px;text-align:center;margin-top:16px;line-height:1.5">Don't have an account? Ask your coach.</p>
+      </div>
+    </div>
+  </div>`}
+
+function bindLogin(){
+  async function doLogin(){
+    const email=document.getElementById('l-email').value.trim()
+    const pw=document.getElementById('l-pw').value
+    const btn=document.getElementById('btn-login')
+    btn.textContent='Signing in…';btn.disabled=true
+    const {data,error}=await db.auth.signInWithPassword({email,password:pw})
+    if(error){
+      const e=document.getElementById('l-err');e.textContent=error.message;e.style.display='block'
+      btn.textContent='Sign In →';btn.disabled=false;return
+    }
+    APP.user=data.user
+    const {data:prof}=await db.from('profiles').select('*').eq('id',data.user.id).single()
+    APP.profile=prof
+    APP.tab=prof?.role==='coach'?'dashboard':'myworkouts'
+    render()
+  }
+  document.getElementById('btn-login').onclick=doLogin
+  document.getElementById('l-email').onkeydown=e=>{if(e.key==='Enter')doLogin()}
+  document.getElementById('l-pw').onkeydown=e=>{if(e.key==='Enter')doLogin()}
+}
+
+async function signOut(){await db.auth.signOut();APP.user=null;APP.profile=null;render()}
+function go(tab){APP.tab=tab;APP.gid=null;render()}
+function openForm(){APP.modal='form';APP.editW=null;render()}
+function openSplitSearch(){APP.modal='splitsearch';render()}
+function closeModal(){APP.modal=null;APP.viewW=null;APP.editW=null;render()}
+
+// ── PAGES ──
+async function pgDash(){
+  const [{data:ws},{data:aths},{data:gs}]=await Promise.all([
+    db.from('workouts').select('*,workout_athletes(athlete_id,profiles(*))').order('date',{ascending:false}).limit(5),
+    db.from('profiles').select('id').eq('role','athlete'),
+    db.from('groups').select('id')
+  ])
+  const {data:allWs}=await db.from('workouts').select('id,date')
+  const mo=new Date().toISOString().slice(0,7)
+  const stats=[{l:'Workouts',v:allWs?.length||0,c:'#c8ff3e'},{l:'Athletes',v:aths?.length||0,c:'#3ecfff'},{l:'Groups',v:gs?.length||0,c:'#ffb347'},{l:'This Month',v:allWs?.filter(w=>w.date?.startsWith(mo)).length||0,c:'#a78bfa'}]
+  return`<div class="page-title">Dashboard</div><div class="page-sub">Welcome, ${esc(APP.profile?.name||'Coach')}</div>
+  <div class="grid4" style="margin-bottom:32px">${stats.map(s=>`<div class="statcard"><div style="font-size:11px;color:#4b5563;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">${s.l}</div><div class="mono" style="font-size:34px;color:${s.c}">${s.v}</div></div>`).join('')}</div>
+  <div style="font-size:11px;color:#4b5563;margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em">Recent Sessions</div>
+  ${(ws||[]).map(w=>wcardHTML(w)).join('')||'<p class="empty">No workouts yet. Hit "+ Log Workout" to get started.</p>'}`
+}
+
+async function pgWorkouts(){
+  const {data:ws}=await db.from('workouts').select('*,workout_athletes(athlete_id,profiles(*))').order('date',{ascending:false})
+  return`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+    <div><div class="page-title">All Workouts</div><div class="page-sub" style="margin-bottom:0">${(ws||[]).length} sessions</div></div>
+    <button class="btn" onclick="openForm()">+ Log Workout</button>
+  </div>${(ws||[]).map(w=>wcardHTML(w)).join('')||'<p class="empty">No workouts yet.</p>'}`
+}
+
+async function pgAthletes(){
+  const {data:aths}=await db.from('profiles').select('*,workout_athletes(workout_id),splits(id),group_members(groups(*))').eq('role','athlete')
+  const cards=(aths||[]).map(a=>{
+    const wc=new Set(a.workout_athletes?.map(x=>x.workout_id)).size
+    const rc=a.splits?.length||0
+    const grps=a.group_members?.map(gm=>gm.groups).filter(Boolean)||[]
+    return`<div class="card" style="cursor:pointer" onclick="go('search')">
+      <div class="row" style="margin-bottom:14px">${av(a,44)}<div style="margin-left:12px">
+        <div style="font-weight:600;font-size:15px;margin-bottom:5px">${esc(a.name)}</div>
+        <div class="row" style="flex-wrap:wrap;gap:4px">${grps.map(g=>`<span class="badge" style="background:${g.color||'#3ecfff'}20;color:${g.color||'#3ecfff'};font-size:10px">${esc(g.name)}</span>`).join('')}</div>
+      </div></div>
+      <div class="grid2" style="gap:8px">${[['Workouts',wc],['Total Reps',rc]].map(([l,v])=>`<div style="background:#1c1f27;border-radius:8px;padding:8px 12px"><div style="font-size:10px;color:#4b5563;margin-bottom:3px;text-transform:uppercase">${l}</div><div class="mono" style="font-size:24px;color:${a.color||'#c8ff3e'}">${v}</div></div>`).join('')}
+      </div></div>`
+  }).join('')
+  return`<div class="page-title" style="margin-bottom:24px">Athletes</div><div class="grid2" style="gap:14px">${cards||'<p class="empty">No athletes yet.</p>'}</div>`
+}
+
+async function pgGroups(){
+  const {data:gs}=await db.from('groups').select('*,group_members(athlete_id,profiles(*))')
+  if(APP.gid){
+    const g=(gs||[]).find(x=>x.id===APP.gid)
+    if(!g){APP.gid=null;return pgGroups()}
+    const members=g.group_members?.map(gm=>gm.profiles).filter(Boolean)||[]
+    const sharingIds=g.group_members?.filter(gm=>gm.profiles?.share_enabled).map(gm=>gm.athlete_id)||[]
+    let feedHTML='<div style="background:#1c1f27;border-radius:10px;padding:24px;text-align:center;color:#6b7280;font-size:14px">No shared splits yet.</div>'
+    if(sharingIds.length){
+      const {data:feed}=await db.from('splits').select('*,profiles(*),workouts(title,date)').in('athlete_id',sharingIds).order('created_at',{ascending:false}).limit(40)
+      if(feed?.length) feedHTML=(feed||[]).map(sp=>`<div class="row" style="gap:12px;padding:12px 14px;background:#1c1f27;border-radius:8px;margin-bottom:6px">${av(sp.profiles,30)}<div style="flex:1"><div><span style="font-weight:600">${esc(sp.profiles?.name||'')}</span> <span class="muted">· ${esc(sp.workouts?.title||'')}</span></div><div style="font-size:11px;color:#4b5563;margin-top:2px">${fmtDate(sp.workouts?.date)} · ${esc(sp.distance||'')}</div></div><div class="mono" style="font-size:18px;color:${sp.profiles?.color||'#c8ff3e'}">${esc(sp.time||'')}</div></div>`).join('')
+    }
+    const memberCards=members.map(m=>`<div class="row" style="gap:10px;background:#1c1f27;border-radius:10px;padding:10px 16px;border:1px solid ${m.share_enabled?(m.color||'#3ecfff')+'50':'#2a2e3a'}">${av(m,30)}<div><div style="font-size:13px;font-weight:600">${esc(m.name)}</div><div style="font-size:11px;color:${m.share_enabled?'#4ade80':'#4b5563'};margin-top:2px">${m.share_enabled?'● Sharing':'○ Private'}</div></div></div>`).join('')
+    return`<button class="ghost sm" style="margin-bottom:20px" onclick="APP.gid=null;render()">← All Groups</button>
+      <div class="row" style="margin-bottom:20px;gap:10px"><div style="width:12px;height:12px;border-radius:50%;background:${g.color||'#3ecfff'};flex-shrink:0;margin-top:4px"></div><div><div style="font-size:20px;font-weight:600">${esc(g.name)}</div><div class="muted">${esc(g.description||'')}</div></div></div>
+      <div class="lbl">Members (${members.length})</div><div class="row" style="flex-wrap:wrap;gap:10px;margin-bottom:24px;margin-top:8px">${memberCards||'<p class="muted">No members.</p>'}</div>
+      <div class="lbl">Shared Splits Feed</div><div style="margin-top:8px">${feedHTML}</div>`
+  }
+  const cards=(gs||[]).map(g=>{
+    const mb=g.group_members||[]
+    const sh=mb.filter(gm=>gm.profiles?.share_enabled)
+    return`<div class="card" style="cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='${g.color||'#3ecfff'}'" onmouseout="this.style.borderColor='#2a2e3a'" onclick="APP.gid='${g.id}';render()">
+      <div class="row" style="margin-bottom:14px"><div style="width:12px;height:12px;border-radius:50%;background:${g.color||'#3ecfff'};flex-shrink:0"></div><div style="margin-left:8px"><div style="font-weight:600;font-size:15px">${esc(g.name)}</div><div class="muted" style="margin-top:2px">${esc(g.description||'')}</div></div></div>
+      <div class="row" style="gap:4px;margin-bottom:12px">${mb.map(gm=>av(gm.profiles,30)).join('')}</div>
+      <div class="row" style="gap:8px"><span class="badge bb">${mb.length} athlete${mb.length!==1?'s':''}</span><span class="badge bg">${sh.length} sharing</span></div>
+    </div>`
+  }).join('')
+  return`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+    <div><div class="page-title">Training Groups</div><div class="page-sub" style="margin-bottom:0">Click a group to see shared splits</div></div>
+    <button class="btn" onclick="showCreateGroup()">+ New Group</button>
+  </div><div class="grid2" style="gap:14px">${cards||'<p class="empty">No groups yet.</p>'}</div>`
+}
+
+async function pgSearch(){
+  const f=APP.filters
+  const {data:aths}=await db.from('profiles').select('*').eq('role','athlete')
+  let q=db.from('workouts').select('*,workout_athletes(athlete_id,profiles(*))').order('date',{ascending:false})
+  if(f.df) q=q.gte('date',f.df)
+  if(f.dt) q=q.lte('date',f.dt)
+  if(f.type) q=q.eq('type',f.type)
+  if(f.loc) q=q.ilike('location',`%${f.loc}%`)
+  if(f.q) q=q.ilike('title',`%${f.q}%`)
+  let {data:ws}=await q
+  if(f.aid) ws=(ws||[]).filter(w=>w.workout_athletes?.some(wa=>wa.athlete_id===f.aid))
+  const athOpts=(aths||[]).map(a=>`<option value="${a.id}" ${f.aid===a.id?'selected':''}>${esc(a.name)}</option>`).join('')
+  const typeOpts=WTYPES.map(t=>`<option value="${t}" ${f.type===t?'selected':''}>${t}</option>`).join('')
+  return`<div class="page-title">Search & Filter</div><div class="page-sub">Find workouts by any field</div>
+  <div class="card" style="margin-bottom:20px">
+    <div class="grid2" style="margin-bottom:12px">
+      <div><label class="lbl">Athlete</label><select id="f-aid" onchange="APP.filters.aid=this.value;render()"><option value="">All athletes</option>${athOpts}</select></div>
+      <div><label class="lbl">Type</label><select id="f-type" onchange="APP.filters.type=this.value;render()"><option value="">All types</option>${typeOpts}</select></div>
+      <div><label class="lbl">Location</label><input value="${esc(f.loc)}" oninput="APP.filters.loc=this.value" onblur="render()" placeholder="Location…"></div>
+      <div><label class="lbl">Date From</label><input type="date" value="${f.df}" onchange="APP.filters.df=this.value;render()"></div>
+      <div><label class="lbl">Date To</label><input type="date" value="${f.dt}" onchange="APP.filters.dt=this.value;render()"></div>
+      <div><label class="lbl">Keyword</label><input value="${esc(f.q)}" oninput="APP.filters.q=this.value" onblur="render()" placeholder="Workout title…"></div>
+    </div>
+    <div class="row" style="gap:10px">
+      <button class="ghost sm" onclick="APP.filters={aid:'',df:'',dt:'',type:'',loc:'',q:''};render()">Clear all</button>
+      <button class="ghost sm" onclick="openSplitSearch()">⚡ Search split times</button>
+    </div>
+  </div>
+  <div style="font-size:12px;color:#4b5563;margin-bottom:12px">${(ws||[]).length} result${(ws||[]).length!==1?'s':''}</div>
+  ${(ws||[]).map(w=>wcardHTML(w)).join('')||'<p class="empty">No workouts match your filters.</p>'}`
+}
+
+async function pgMyWorkouts(){
+  const p=APP.profile
+  const {data:waRows}=await db.from('workout_athletes').select('workouts(*,splits(*),workout_athletes(athlete_id,profiles(*)))').eq('athlete_id',p.id)
+  const ws=(waRows||[]).map(r=>r.workouts).filter(Boolean).sort((a,b)=>(b.date||'').localeCompare(a.date||''))
+  const cards=ws.map(w=>{
+    const mySplits=(w.splits||[]).filter(s=>s.athlete_id===p.id).slice(0,4)
+    const chips=mySplits.map(r=>`<span class="mono" style="font-size:11px;background:#1c1f27;padding:3px 8px;border-radius:6px;color:#c8ff3e">${esc(r.distance)} ${esc(r.time)}</span>`).join('')
+    return`<div class="wcard" onclick="openDetail('${w.id}')">
+      <div style="font-weight:600;margin-bottom:6px">${esc(w.title)}</div>
+      <div class="row" style="flex-wrap:wrap;gap:7px;margin-bottom:${mySplits.length?10:0}px">
+        <span class="badge ba">${esc(w.type)}</span><span class="muted">${fmtDate(w.date)}</span><span class="muted">· ${esc(w.location||'—')}</span><span style="font-size:15px">${wicon(w.weather)}</span>
+      </div>${chips?`<div class="row" style="flex-wrap:wrap;gap:6px">${chips}</div>`:''}</div>`
+  }).join('')
+  return`<div class="row" style="margin-bottom:20px;gap:14px">${av(p,50)}<div>
+    <div style="font-size:26px;font-weight:800;font-style:italic;letter-spacing:-.5px">${esc(p.name)}</div>
+    <div class="muted" style="margin-top:2px">${ws.length} workouts logged</div></div></div>
+  <div style="background:#0d1a00;border:1px solid #1a2600;border-radius:10px;padding:14px 18px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center">
+    <div><div style="font-size:13px;font-weight:600;color:#c8ff3e;margin-bottom:3px">Share splits with group</div><div style="font-size:12px;color:#4b7a00">Teammates can see your splits in the group feed</div></div>
+    <div class="toggle ${p.share_enabled?'on':'off'}" onclick="toggleShare()"></div>
+  </div>${cards||'<p class="empty">No workouts yet. Your coach will add you to sessions.</p>'}`
+}
+
+async function pgMySplits(){
+  const {data:splits}=await db.from('splits').select('*,workouts(title,date,type)').eq('athlete_id',APP.profile.id).order('created_at',{ascending:false})
+  const rows=(splits||[]).map(sp=>`<div class="wcard" style="display:flex;align-items:center;gap:14px" onclick="openDetail('${sp.workout_id}')">
+    <div class="mono" style="font-size:20px;color:#c8ff3e;min-width:90px">${esc(sp.time||'')}</div>
+    <div style="flex:1"><div style="font-size:13px;font-weight:600">${esc(sp.distance||'')}</div><div class="muted" style="margin-top:2px">${esc(sp.workouts?.title||'')} · ${fmtDate(sp.workouts?.date)}</div></div>
+    <span class="badge ba">${esc(sp.workouts?.type||'')}</span></div>`).join('')
+  return`<div class="page-title">My Splits</div><div class="page-sub">${(splits||[]).length} recorded splits</div>${rows||'<p class="empty">No splits recorded yet.</p>'}`
+}
+
+async function pgMyGroups(){
+  const {data:gRows}=await db.from('group_members').select('groups(*,group_members(athlete_id,profiles(*)))').eq('athlete_id',APP.profile.id)
+  const gs=(gRows||[]).map(r=>r.groups).filter(Boolean)
+  if(APP.gid){
+    const g=gs.find(x=>x.id===APP.gid)
+    if(!g){APP.gid=null;return pgMyGroups()}
+    const members=g.group_members?.map(gm=>gm.profiles).filter(Boolean)||[]
+    const sharingIds=g.group_members?.filter(gm=>gm.profiles?.share_enabled&&gm.athlete_id!==APP.profile.id).map(gm=>gm.athlete_id)||[]
+    let feedHTML='<div style="background:#1c1f27;border-radius:10px;padding:24px;text-align:center;color:#6b7280;font-size:14px">No shared splits from teammates yet.</div>'
+    if(sharingIds.length){
+      const {data:feed}=await db.from('splits').select('*,profiles(*),workouts(title,date)').in('athlete_id',sharingIds).order('created_at',{ascending:false}).limit(40)
+      if(feed?.length) feedHTML=(feed||[]).map(sp=>`<div class="row" style="gap:12px;padding:12px 14px;background:#1c1f27;border-radius:8px;margin-bottom:6px">${av(sp.profiles,30)}<div style="flex:1"><div><span style="font-weight:600">${esc(sp.profiles?.name||'')}</span> <span class="muted">· ${esc(sp.workouts?.title||'')}</span></div><div style="font-size:11px;color:#4b5563;margin-top:2px">${fmtDate(sp.workouts?.date)} · ${esc(sp.distance||'')}</div></div><div class="mono" style="font-size:18px;color:${sp.profiles?.color||'#c8ff3e'}">${esc(sp.time||'')}</div></div>`).join('')
+    }
+    const memberCards=members.map(m=>`<div class="row" style="gap:10px;background:#1c1f27;border-radius:10px;padding:10px 16px;border:1px solid ${m.share_enabled?(m.color||'#3ecfff')+'50':'#2a2e3a'}">${av(m,30)}<div><div style="font-size:13px;font-weight:600">${esc(m.name)}${m.id===APP.profile.id?' (you)':''}</div><div style="font-size:11px;color:${m.share_enabled?'#4ade80':'#4b5563'};margin-top:2px">${m.share_enabled?'● Sharing':'○ Private'}</div></div></div>`).join('')
+    return`<button class="ghost sm" style="margin-bottom:20px" onclick="APP.gid=null;render()">← All Groups</button>
+      <div class="row" style="margin-bottom:20px;gap:10px"><div style="width:12px;height:12px;border-radius:50%;background:${g.color||'#3ecfff'};flex-shrink:0"></div><div><div style="font-size:20px;font-weight:600">${esc(g.name)}</div><div class="muted">${esc(g.description||'')}</div></div></div>
+      <div class="lbl">Members (${members.length})</div><div class="row" style="flex-wrap:wrap;gap:10px;margin-bottom:24px;margin-top:8px">${memberCards}</div>
+      <div class="lbl">Teammates' Shared Splits</div><div style="margin-top:8px">${feedHTML}</div>`
+  }
+  const cards=gs.map(g=>{
+    const mb=g.group_members||[]
+    const sh=mb.filter(gm=>gm.profiles?.share_enabled)
+    return`<div class="card" style="cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='${g.color||'#3ecfff'}'" onmouseout="this.style.borderColor='#2a2e3a'" onclick="APP.gid='${g.id}';render()">
+      <div class="row" style="margin-bottom:14px"><div style="width:12px;height:12px;border-radius:50%;background:${g.color||'#3ecfff'};flex-shrink:0"></div><div style="margin-left:8px"><div style="font-weight:600;font-size:15px">${esc(g.name)}</div><div class="muted" style="margin-top:2px">${esc(g.description||'')}</div></div></div>
+      <div class="row" style="gap:4px;margin-bottom:12px">${mb.map(gm=>av(gm.profiles,30)).join('')}</div>
+      <div class="row" style="gap:8px"><span class="badge bb">${mb.length} athlete${mb.length!==1?'s':''}</span><span class="badge bg">${sh.length} sharing</span></div></div>`
+  }).join('')
+  return`<div class="page-title">My Groups</div><div class="page-sub">Click a group to see teammates' splits</div>${cards||'<p class="empty">You haven\'t been added to any groups yet.</p>'}`
+}
+
+// ── WORKOUT CARD HTML ──
+function wcardHTML(w){
+  const aths=w.workout_athletes?.map(wa=>av(wa.profiles,28)).join('')||''
+  return`<div class="wcard" onclick="openDetail('${w.id}')">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div style="font-weight:600;margin-bottom:6px">${esc(w.title)}</div>
+        <div class="row" style="flex-wrap:wrap;gap:7px">
+          <span class="badge ba">${esc(w.type)}</span><span class="muted">${fmtDate(w.date)}</span>
+          ${w.time_of_day?`<span class="muted">· ${esc(w.time_of_day)}</span>`:''}
+          <span class="muted">· ${esc(w.location||'—')}</span>
+          <span style="font-size:15px">${wicon(w.weather)}</span>
+          ${w.weather?`<span class="muted">${esc(w.weather)}</span>`:''}
+        </div>
+      </div>
+      <div class="row" style="gap:4px;flex-shrink:0;margin-left:12px">${aths}</div>
+    </div></div>`
+}
+
+// ── OPEN DETAIL ──
+async function openDetail(wid){
+  const {data:w}=await db.from('workouts').select('*,splits(*,profiles(*)),workout_athletes(athlete_id,profiles(*))').eq('id',wid).single()
+  APP.viewW=w;APP.modal='detail';render()
+}
+
+// ── WORKOUT DETAIL MODAL ──
+async function wdetailHTML(){
+  const w=APP.viewW
+  const isCoach=APP.profile?.role==='coach'
+  const splitsByAth={}
+  const athProfs={}
+  ;(w.splits||[]).forEach(sp=>{
+    if(!splitsByAth[sp.athlete_id]) splitsByAth[sp.athlete_id]=[]
+    splitsByAth[sp.athlete_id].push(sp)
+    if(sp.profiles) athProfs[sp.athlete_id]=sp.profiles
+  })
+  Object.values(splitsByAth).forEach(arr=>arr.sort((a,b)=>(a.rep_number||0)-(b.rep_number||0)))
+  const athIds=Object.keys(splitsByAth).filter(aid=>isCoach||aid===APP.profile?.id)
+  const splitBlocks=athIds.map(aid=>{
+    const reps=splitsByAth[aid]
+    const u=athProfs[aid]
+    const best=bestIdx(reps)
+    const rows=reps.map((r,i)=>`<div class="splitrow"><span style="flex:1;font-size:13px;color:#6b7280">Rep ${r.rep_number} · ${esc(r.distance||'')}</span><span class="mono" style="font-size:16px;color:${i===best?'#c8ff3e':'#e8e6e0'}">${esc(r.time||'')}</span>${i===best?'<span style="margin-left:8px;font-size:10px;color:#c8ff3e;font-weight:700">BEST</span>':''}</div>`).join('')
+    return`<div style="margin-bottom:18px">
+      <div class="row" style="margin-bottom:8px">${av(u,30)}<span style="font-weight:600;margin-left:8px">${esc(u?.name||'?')}</span><span class="badge bb" style="margin-left:auto">${reps.length} reps</span></div>
+      <div style="background:#1c1f27;border-radius:8px;overflow:hidden">${rows}</div></div>`
+  }).join('')
+  return`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:660px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
+        <div><div style="font-size:22px;font-weight:700;margin-bottom:10px">${esc(w.title)}</div>
+          <div class="row" style="flex-wrap:wrap;gap:8px"><span class="badge ba">${esc(w.type)}</span><span class="muted">${fmtDate(w.date)}</span>${w.time_of_day?`<span class="muted">· ${esc(w.time_of_day)}</span>`:''}<span style="font-size:16px">${wicon(w.weather)}</span>${w.weather?`<span class="muted">${esc(w.weather)}</span>`:''}</div>
+        </div><button class="ghost sm" onclick="closeModal()">✕ Close</button>
+      </div>
+      <div class="grid2" style="margin-bottom:18px">
+        ${[['Location',w.location||'—'],['Surface',w.surface||'—']].map(([k,v])=>`<div style="background:#1c1f27;border-radius:8px;padding:10px 14px"><div style="font-size:10px;color:#4b5563;margin-bottom:3px;text-transform:uppercase">${k}</div><div style="font-size:14px">${esc(v)}</div></div>`).join('')}
+      </div>
+      <div class="lbl" style="margin-bottom:12px">Athletes & Splits</div>
+      ${splitBlocks||'<p class="muted">No splits recorded.</p>'}
+      ${isCoach&&w.coach_notes?`<div style="background:#0d1a00;border:1px solid #1a2600;border-radius:10px;padding:14px 16px;margin-top:8px"><div style="font-size:11px;color:#4b7a00;margin-bottom:6px">🔒 Coach Notes (Private)</div><p style="font-size:14px;color:#9ca3af;line-height:1.7">${esc(w.coach_notes)}</p></div>`:''}
+    </div></div>`
+}
+
+// ── WORKOUT FORM ──
+let WF={selIds:[],splits:{},saving:false}
+async function wformHTML(){
+  const ew=APP.editW
+  const {data:aths}=await db.from('profiles').select('*').eq('role','athlete')
+  WF.selIds=ew?.workout_athletes?.map(wa=>wa.athlete_id)||WF.selIds||[]
+  const chips=(aths||[]).map(a=>{
+    const on=WF.selIds.includes(a.id)
+    return`<div class="ath-chip" data-aid="${a.id}" style="display:flex;align-items:center;gap:7px;padding:6px 14px;border-radius:20px;cursor:pointer;border:1px solid ${on?a.color||'#c8ff3e':'#2a2e3a'};background:${on?(a.color||'#c8ff3e')+'18':'transparent'};transition:all .15s"><div style="width:8px;height:8px;border-radius:50%;background:${a.color||'#c8ff3e'}"></div><span style="font-size:13px;color:${on?a.color||'#c8ff3e':'#9ca3af'}">${esc(a.name)}</span></div>`
+  }).join('')
+  const splitsHTML=WF.selIds.map(aid=>{
+    const a=(aths||[]).find(x=>x.id===aid)
+    const reps=WF.splits[aid]||[{d:'',t:''}]
+    const repRows=reps.map((r,i)=>`<div class="row" style="gap:8px;margin-bottom:6px"><input class="rep-d" data-aid="${aid}" data-i="${i}" type="text" placeholder="400m" value="${esc(r.d)}" style="width:110px;flex-shrink:0"><input class="rep-t" data-aid="${aid}" data-i="${i}" type="text" placeholder="58.4" value="${esc(r.t)}" style="font-family:monospace"><button onclick="removeRep('${aid}',${i})" style="background:none;border:none;color:#ff4444;font-size:22px;padding:0 4px;cursor:pointer;flex-shrink:0">×</button></div>`).join('')
+    return`<div style="background:#0d0f13;border:1px solid #1c1f27;border-radius:10px;padding:12px;margin-bottom:10px"><div class="row" style="margin-bottom:10px">${av(a,26)}<span style="font-size:13px;font-weight:600;margin-left:8px">${esc(a?.name||'')}</span></div>${repRows}<button class="ghost sm" style="margin-top:4px" onclick="addRep('${aid}')">+ Add Rep</button></div>`
+  }).join('')
+  const today=new Date().toISOString().slice(0,10)
+  const typeOpts=WTYPES.map(t=>`<option ${ew?.type===t?'selected':''}>${t}</option>`).join('')
+  const surfOpts=SURFS.map(s=>`<option ${ew?.surface===s?'selected':''}>${s}</option>`).join('')
+  return`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal" style="max-width:700px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <span style="font-size:22px;font-weight:800;color:#c8ff3e;font-style:italic">${ew?'Edit':'Log'} Workout</span>
+        <button class="ghost sm" onclick="closeModal()">✕ Close</button>
+      </div>
+      <div class="grid2" style="margin-bottom:16px">
+        <div style="grid-column:1/-1;position:relative"><label class="lbl">Workout Title</label><input id="wf-title" type="text" placeholder="e.g. 400m Repeat Intervals" value="${esc(ew?.title||'')}"><div class="ac-drop" id="wf-ac" style="display:none"></div></div>
+        <div><label class="lbl">Date</label><input id="wf-date" type="date" value="${ew?.date||today}"></div>
+        <div><label class="lbl">Time</label><input id="wf-time" type="text" placeholder="3:30 PM" value="${esc(ew?.time_of_day||'')}"></div>
+        <div><label class="lbl">Type</label><select id="wf-type">${typeOpts}</select></div>
+        <div><label class="lbl">Surface</label><select id="wf-surf">${surfOpts}</select></div>
+        <div><label class="lbl">Location</label><input id="wf-loc" type="text" placeholder="Track, trail…" value="${esc(ew?.location||'')}"></div>
+        <div><label class="lbl">Weather</label><input id="wf-wx" type="text" placeholder="Sunny 72°F" value="${esc(ew?.weather||'')}"></div>
+      </div>
+      <div style="margin-bottom:16px"><label class="lbl">Athletes</label><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:6px" id="ath-chips">${chips}</div></div>
+      <div id="splits-sec" style="margin-bottom:16px">${splitsHTML?`<label class="lbl">Splits / Reps</label>${splitsHTML}`:''}</div>
+      <div style="margin-bottom:18px"><label class="lbl">🔒 Coach Notes (private — athletes never see this)</label><textarea id="wf-notes" placeholder="What would you change next time?" style="min-height:80px">${esc(ew?.coach_notes||'')}</textarea></div>
+      <div class="row" style="justify-content:flex-end;gap:10px"><button class="ghost" onclick="closeModal()">Cancel</button><button class="btn" id="btn-save-w" onclick="saveWorkout()">Save Workout</button></div>
+    </div></div>`
+}
+
+function addRep(aid){if(!WF.splits[aid])WF.splits[aid]=[{d:'',t:''}];else WF.splits[aid].push({d:'',t:''});syncReps();rerenderSplits()}
+function removeRep(aid,i){if(WF.splits[aid])WF.splits[aid].splice(i,1);syncReps();rerenderSplits()}
+function syncReps(){
+  document.querySelectorAll('.rep-d').forEach(inp=>{const aid=inp.dataset.aid,i=+inp.dataset.i;if(WF.splits[aid])WF.splits[aid][i].d=inp.value})
+  document.querySelectorAll('.rep-t').forEach(inp=>{const aid=inp.dataset.aid,i=+inp.dataset.i;if(WF.splits[aid])WF.splits[aid][i].t=inp.value})
+}
+function rerenderSplits(){
+  const sec=document.getElementById('splits-sec');if(!sec)return
+  db.from('profiles').select('*').eq('role','athlete').then(({data:aths})=>{
+    const splitsHTML=WF.selIds.map(aid=>{
+      const a=(aths||[]).find(x=>x.id===aid)
+      const reps=WF.splits[aid]||[]
+      const repRows=reps.map((r,i)=>`<div class="row" style="gap:8px;margin-bottom:6px"><input class="rep-d" data-aid="${aid}" data-i="${i}" type="text" placeholder="400m" value="${esc(r.d)}" style="width:110px;flex-shrink:0"><input class="rep-t" data-aid="${aid}" data-i="${i}" type="text" placeholder="58.4" value="${esc(r.t)}" style="font-family:monospace"><button onclick="removeRep('${aid}',${i})" style="background:none;border:none;color:#ff4444;font-size:22px;padding:0 4px;cursor:pointer;flex-shrink:0">×</button></div>`).join('')
+      return`<div style="background:#0d0f13;border:1px solid #1c1f27;border-radius:10px;padding:12px;margin-bottom:10px"><div class="row" style="margin-bottom:10px">${av(a,26)}<span style="font-size:13px;font-weight:600;margin-left:8px">${esc(a?.name||'')}</span></div>${repRows}<button class="ghost sm" style="margin-top:4px" onclick="addRep('${aid}')">+ Add Rep</button></div>`
+    }).join('')
+    sec.innerHTML=splitsHTML?`<label class="lbl">Splits / Reps</label>${splitsHTML}`:''
+  })
+}
+
+async function saveWorkout(){
+  syncReps()
+  const title=document.getElementById('wf-title')?.value.trim()
+  if(!title||WF.saving)return
+  WF.saving=true
+  const btn=document.getElementById('btn-save-w');if(btn){btn.textContent='Saving…';btn.disabled=true}
+  const w={title,type:document.getElementById('wf-type')?.value,date:document.getElementById('wf-date')?.value,time_of_day:document.getElementById('wf-time')?.value,location:document.getElementById('wf-loc')?.value,surface:document.getElementById('wf-surf')?.value,weather:document.getElementById('wf-wx')?.value,coach_notes:document.getElementById('wf-notes')?.value,coach_id:APP.profile.id}
+  const ew=APP.editW
+  let wid=ew?.id
+  if(ew){await db.from('workouts').update(w).eq('id',wid);await db.from('workout_athletes').delete().eq('workout_id',wid);await db.from('splits').delete().eq('workout_id',wid)}
+  else{const {data}=await db.from('workouts').insert(w).select().single();wid=data.id}
+  if(WF.selIds.length) await db.from('workout_athletes').insert(WF.selIds.map(aid=>({workout_id:wid,athlete_id:aid})))
+  const srows=[]
+  WF.selIds.forEach(aid=>{(WF.splits[aid]||[]).forEach((r,i)=>{if(r.d||r.t)srows.push({workout_id:wid,athlete_id:aid,rep_number:i+1,distance:r.d,time:r.t})})})
+  if(srows.length) await db.from('splits').insert(srows)
+  WF={selIds:[],splits:{},saving:false}
+  APP.modal=null;APP.editW=null;render()
+}
+
+// ── SPLIT SEARCH ──
+function splitSearchHTML(){
+  return`<div class="overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div style="display:flex;justify-content:space-between;margin-bottom:18px">
+        <div><div style="font-size:22px;font-weight:800;color:#c8ff3e;font-style:italic">Split Search</div><div class="muted" style="margin-top:3px">Find any split across all sessions</div></div>
+        <button class="ghost sm" onclick="closeModal()">✕ Close</button>
+      </div>
+      <input id="ss-inp" autofocus type="text" placeholder="Type a time (e.g. 54.9) or distance (400m, Mile 1)…" style="margin-bottom:14px">
+      <div id="ss-res"><p style="color:#4b5563;text-align:center;padding:40px;font-size:14px">Type above to search…</p></div>
+    </div></div>`
+}
+
+async function doSplitSearch(q){
+  const res=document.getElementById('ss-res');if(!res)return
+  if(!q.trim()){res.innerHTML='<p style="color:#4b5563;text-align:center;padding:40px;font-size:14px">Type above to search…</p>';return}
+  const {data}=await db.from('splits').select('*,profiles(*),workouts(title,date,location)').or(`time.ilike.%${q}%,distance.ilike.%${q}%`).limit(40)
+  if(!data?.length){res.innerHTML=`<p style="color:#6b7280;text-align:center;padding:32px;font-size:14px">No splits found for "${esc(q)}"</p>`;return}
+  res.innerHTML=data.map(sp=>`<div class="row" style="padding:11px 0;border-bottom:1px solid #1c1f27;gap:12px">${av(sp.profiles,30)}<div style="flex:1"><div style="font-size:13px;font-weight:600">${esc(sp.profiles?.name||'')}</div><div class="muted" style="margin-top:2px">${esc(sp.workouts?.title||'')} · ${fmtDate(sp.workouts?.date)} · ${esc(sp.workouts?.location||'')}</div></div><div style="text-align:right"><div class="mono" style="font-size:17px;color:${sp.profiles?.color||'#c8ff3e'}">${esc(sp.time||'')}</div><div style="font-size:11px;color:#6b7280;margin-top:2px">${esc(sp.distance||'')}</div></div></div>`).join('')
+}
+
+// ── SHARE TOGGLE ──
+async function toggleShare(){
+  const newVal=!APP.profile.share_enabled
+  await db.from('profiles').update({share_enabled:newVal}).eq('id',APP.profile.id)
+  APP.profile.share_enabled=newVal
+  render()
+}
+
+// ── CREATE GROUP ──
+async function showCreateGroup(){
+  const {data:aths}=await db.from('profiles').select('*').eq('role','athlete')
+  const chips=(aths||[]).map(a=>`<div class="ath-chip" data-aid="${a.id}" style="display:flex;align-items:center;gap:7px;padding:6px 14px;border-radius:20px;cursor:pointer;border:1px solid #2a2e3a;background:transparent"><span style="font-size:13px;color:#9ca3af">${esc(a.name)}</span></div>`).join('')
+  const existing=document.getElementById('app')
+  const modal=document.createElement('div')
+  modal.className='overlay'
+  modal.id='create-group-modal'
+  modal.innerHTML=`<div class="modal" style="max-width:480px">
+    <div style="display:flex;justify-content:space-between;margin-bottom:18px"><span style="font-size:18px;font-weight:700">New Group</span><button class="ghost sm" onclick="document.getElementById('create-group-modal').remove()">✕</button></div>
+    <div style="margin-bottom:12px"><label class="lbl">Group Name</label><input id="ng-name" placeholder="Sprint Group"></div>
+    <div style="margin-bottom:16px"><label class="lbl">Description</label><input id="ng-desc" placeholder="100m–400m specialists"></div>
+    <div style="margin-bottom:18px"><label class="lbl">Add Athletes</label><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:6px" id="ng-chips">${chips}</div></div>
+    <div class="row" style="justify-content:flex-end;gap:10px"><button class="ghost" onclick="document.getElementById('create-group-modal').remove()">Cancel</button><button class="btn" onclick="createGroup()">Create Group</button></div>
+  </div>`
+  document.body.appendChild(modal)
+  bindChips('ng-chips')
+}
+
+async function createGroup(){
+  const name=document.getElementById('ng-name')?.value.trim()
+  if(!name)return
+  const desc=document.getElementById('ng-desc')?.value||''
+  const selIds=[...document.querySelectorAll('#ng-chips .ath-chip.sel')].map(el=>el.dataset.aid)
+  const {data:g}=await db.from('groups').insert({name,description:desc,coach_id:APP.profile.id,color:'#3ecfff'}).select().single()
+  if(g&&selIds.length) await db.from('group_members').insert(selIds.map(id=>({group_id:g.id,athlete_id:id})))
+  document.getElementById('create-group-modal')?.remove()
+  render()
+}
+
+// ── BIND ALL ──
+function bindAll(){
+  // athlete chip toggles in workout form
+  bindChips('ath-chips')
+  // title autocomplete
+  const ti=document.getElementById('wf-title')
+  if(ti) ti.oninput=async()=>{
+    const q=ti.value.trim()
+    const ac=document.getElementById('wf-ac');if(!ac)return
+    if(q.length<3){ac.style.display='none';return}
+    const {data}=await db.from('workouts').select('id,title,type,location,surface').ilike('title',`%${q}%`).limit(5)
+    if(!data?.length){ac.style.display='none';return}
+    ac.innerHTML=`<div style="padding:7px 12px;font-size:11px;color:#c8ff3e;border-bottom:1px solid #2a2e3a">✨ Auto-fill from past workout</div>`+data.map(w=>`<div class="ac-item" onclick="fillForm('${w.id}','${esc(w.title)}','${esc(w.type||'')}','${esc(w.location||'')}','${esc(w.surface||'')}')"><div style="font-weight:600">${esc(w.title)}</div><div style="font-size:11px;color:#6b7280;margin-top:2px">${esc(w.location||'')}</div></div>`).join('')
+    ac.style.display='block'
+  }
+  // split search
+  const ssi=document.getElementById('ss-inp')
+  if(ssi){ssi.focus();ssi.oninput=()=>doSplitSearch(ssi.value)}
+}
+
+function fillForm(id,title,type,loc,surf){
+  const t=document.getElementById('wf-title');if(t)t.value=title
+  const ty=document.getElementById('wf-type');if(ty)ty.value=type
+  const l=document.getElementById('wf-loc');if(l)l.value=loc
+  const s=document.getElementById('wf-surf');if(s)s.value=surf
+  const ac=document.getElementById('wf-ac');if(ac)ac.style.display='none'
+}
+
+function bindChips(containerId){
+  const container=document.getElementById(containerId);if(!container)return
+  container.querySelectorAll('.ath-chip').forEach(chip=>{
+    chip.onclick=()=>{
+      const aid=chip.dataset.aid
+      if(containerId==='ath-chips'){
+        // workout form athlete selection
+        syncReps()
+        if(WF.selIds.includes(aid)){WF.selIds=WF.selIds.filter(x=>x!==aid);delete WF.splits[aid]}
+        else{WF.selIds.push(aid);if(!WF.splits[aid])WF.splits[aid]=[{d:'',t:''}]}
+        // re-color chip
+        chip.classList.toggle('sel')
+        const isOn=WF.selIds.includes(aid)
+        // re-render chips and splits
+        wformHTML().then(html=>{
+          const tmp=document.createElement('div');tmp.innerHTML=html
+          const newChips=tmp.querySelector('#ath-chips');const oldChips=document.getElementById('ath-chips')
+          if(newChips&&oldChips){oldChips.innerHTML=newChips.innerHTML;bindChips('ath-chips')}
+          rerenderSplits()
+        })
+      } else {
+        // group creation
+        chip.classList.toggle('sel')
+        const on=chip.classList.contains('sel')
+        chip.style.border=`1px solid ${on?'#3ecfff':'#2a2e3a'}`
+        chip.style.background=on?'#0d1f2b':'transparent'
+        chip.querySelector('span').style.color=on?'#3ecfff':'#9ca3af'
+      }
+    }
+  })
+}
+
+// ── BOOT ──
+async function boot(){
+  const {data:{session}}=await db.auth.getSession()
+  if(session){
+    APP.user=session.user
+    const {data:prof}=await db.from('profiles').select('*').eq('id',session.user.id).single()
+    APP.profile=prof
+    APP.tab=prof?.role==='coach'?'dashboard':'myworkouts'
+  }
+  render()
+  db.auth.onAuthStateChange((_,session)=>{
+    if(!session){APP.user=null;APP.profile=null;render()}
+  })
+}
+boot()
+</script>
+</body>
 </html>
