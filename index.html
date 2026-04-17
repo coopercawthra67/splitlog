@@ -257,7 +257,10 @@ async function pgAthletes(){
       <button onclick="confirmRemoveAthlete('${a.id}','${esc(a.name)}')" style="background:none;border:none;color:#4b5563;font-size:18px;cursor:pointer;padding:4px;flex-shrink:0" title="Remove athlete">✕</button>
       </div>
       <div class="grid2" style="gap:8px;margin-bottom:12px">${[['Workouts',wc],['Total Reps',rc]].map(([l,v])=>`<div style="background:#1c1f27;border-radius:8px;padding:8px 12px"><div style="font-size:10px;color:#4b5563;margin-bottom:3px;text-transform:uppercase">${l}</div><div class="mono" style="font-size:24px;color:${a.color||'#c8ff3e'}">${v}</div></div>`).join('')}</div>
-      <button class="ghost sm" style="width:100%" onclick="APP.filters.aid='${a.id}';go('search')">View workouts →</button>
+      <div class="row" style="gap:8px">
+        <button class="ghost sm" style="flex:1" onclick="APP.filters.aid='${a.id}';go('search')">View workouts →</button>
+        <button class="ghost sm" onclick="sendInvite('${a.id}','${esc(a.name)}','${esc(a.pending_email||'')}')" title="Send invite email" style="flex-shrink:0">✉️ Invite</button>
+      </div>
       </div>`
   }).join('')
   return`
@@ -667,23 +670,28 @@ function showAddAthlete(){
       <span style="font-size:20px;font-weight:800;color:#c8ff3e;font-style:italic">Add Athlete</span>
       <button class="ghost sm" onclick="document.getElementById('add-athlete-modal').remove()">✕ Close</button>
     </div>
-    <div style="margin-bottom:14px"><label class="lbl">Full Name</label><input id="na-name" type="text" placeholder="e.g. Elise Smoot" autofocus></div>
-    <div style="margin-bottom:14px"><label class="lbl">Email</label><input id="na-email" type="email" placeholder="elise@email.com"></div>
-    <div style="margin-bottom:20px">
-      <div style="background:#0d1a00;border:1px solid #1a2600;border-radius:8px;padding:12px;font-size:13px;color:#4b7a00;line-height:1.6">
-        ✉️ They will receive an email with a link to set their own password and access SplitLog.
-      </div>
-    </div>
-    <div style="margin-bottom:20px"><label class="lbl">Avatar Color</label>
+
+    <div style="margin-bottom:18px"><label class="lbl">Full Name</label><input id="na-name" type="text" placeholder="e.g. Elise Smoot" autofocus></div>
+
+    <div style="margin-bottom:18px"><label class="lbl">Avatar Color</label>
       <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:6px">
         ${COLORS.map(c=>`<div class="color-pick" data-color="${c}" onclick="pickColor('${c}')" style="width:32px;height:32px;border-radius:50%;background:${c};cursor:pointer;border:3px solid ${c===randomColor?'#fff':'transparent'};transition:border .15s"></div>`).join('')}
       </div>
       <input type="hidden" id="na-color" value="${randomColor}">
     </div>
+
+    <div style="border-top:1px solid #2a2e3a;padding-top:18px;margin-bottom:18px">
+      <label class="lbl" style="margin-bottom:10px">Send Invite Email? <span style="color:#4b5563;font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+      <input id="na-email" type="email" placeholder="athlete@email.com — leave blank to add without invite">
+      <div style="background:#0d1a00;border:1px solid #1a2600;border-radius:8px;padding:10px 12px;font-size:12px;color:#4b7a00;line-height:1.6;margin-top:8px">
+        ✉️ If you enter an email, they'll get a link to set their password. If you leave it blank, they appear on the roster right away and you can invite them later.
+      </div>
+    </div>
+
     <div id="na-err" style="display:none;color:#ff6b6b;font-size:13px;background:#2b0d0d;padding:8px 12px;border-radius:6px;margin-bottom:12px"></div>
     <div class="row" style="justify-content:flex-end;gap:10px">
       <button class="ghost" onclick="document.getElementById('add-athlete-modal').remove()">Cancel</button>
-      <button class="btn" id="na-btn" onclick="addAthlete()">Send Invite</button>
+      <button class="btn" id="na-btn" onclick="addAthlete()">Add Athlete</button>
     </div>
   </div>`
   document.body.appendChild(modal)
@@ -703,49 +711,107 @@ async function addAthlete(){
   const color=document.getElementById('na-color')?.value||'#3ecfff'
   const err=document.getElementById('na-err')
   const btn=document.getElementById('na-btn')
-  if(!name||!email){if(err){err.textContent='Please enter a name and email.';err.style.display='block'}return}
-  if(btn){btn.textContent='Sending…';btn.disabled=true}
+  if(!name){if(err){err.textContent='Please enter the athlete's name.';err.style.display='block'}return}
+  if(btn){btn.textContent='Adding…';btn.disabled=true}
 
   const initials=name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()
 
-  // Use Supabase invite - sends a nice email, athlete sets their own password
-  const {data,error}=await db.auth.signInWithOtp({
-    email,
-    options:{
-      emailRedirectTo:'https://splitlog.netlify.app',
-      data:{name,role:'athlete',color,avatar_initials:initials}
-    }
+  // Always create the profile immediately so they appear on the roster
+  const tempId=crypto.randomUUID()
+  const {error:profErr}=await db.from('profiles').insert({
+    id:tempId, name, role:'athlete', color,
+    avatar_initials:initials, share_enabled:false, active:true,
+    pending_email:email||null
   })
 
-  if(error){
-    if(err){err.textContent=error.message;err.style.display='block'}
-    if(btn){btn.textContent='Send Invite';btn.disabled=false}
+  if(profErr){
+    if(err){err.textContent=profErr.message;err.style.display='block'}
+    if(btn){btn.textContent='Add Athlete';btn.disabled=false}
     return
   }
 
-  // Create the profile right away so they appear on the roster immediately
-  // We use a placeholder id that will be replaced when they confirm
-  const tempId = crypto.randomUUID()
-  await db.from('profiles').insert({
-    id:tempId, name, role:'athlete', color,
-    avatar_initials:initials, share_enabled:false, active:true,
-    pending_email:email
-  }).select()
+  // If email provided, send invite
+  if(email){
+    await db.auth.signInWithOtp({
+      email,
+      options:{emailRedirectTo:'https://splitlog.netlify.app',data:{name,role:'athlete',color,avatar_initials:initials}}
+    })
+  }
 
   document.getElementById('add-athlete-modal')?.remove()
 
-  // Show success
   const successModal=document.createElement('div')
   successModal.className='overlay'
   successModal.innerHTML=`<div class="modal" style="max-width:440px;text-align:center" onclick="event.stopPropagation()">
-    <div style="font-size:40px;margin-bottom:16px">✉️</div>
-    <div style="font-size:18px;font-weight:700;margin-bottom:8px">Invite sent to ${esc(name)}!</div>
-    <p style="color:#6b7280;font-size:14px;margin-bottom:8px;line-height:1.6">An email has been sent to <strong style="color:#e8e6e0">${esc(email)}</strong>.</p>
-    <p style="color:#6b7280;font-size:14px;margin-bottom:24px;line-height:1.6">They'll click the link, set their own password, and be ready to go.</p>
+    <div style="font-size:40px;margin-bottom:16px">${email?'✉️':'✅'}</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:10px">${esc(name)} added!</div>
+    ${email
+      ?`<p style="color:#6b7280;font-size:14px;margin-bottom:24px;line-height:1.6">An invite has been sent to <strong style="color:#e8e6e0">${esc(email)}</strong>. They'll set their password and be ready to go.</p>`
+      :`<p style="color:#6b7280;font-size:14px;margin-bottom:24px;line-height:1.6">They've been added to your roster. You can send them an invite email any time from the Athletes page.</p>`
+    }
     <button class="btn" style="width:100%" onclick="this.closest('.overlay').remove();APP.tab='athletes';render()">Done</button>
   </div>`
   document.body.appendChild(successModal)
   successModal.onclick=e=>{if(e.target===successModal){successModal.remove();APP.tab='athletes';render()}}
+}
+
+// ── SEND INVITE ──
+function sendInvite(id, name, existingEmail){
+  const modal=document.createElement('div')
+  modal.className='overlay'
+  modal.id='invite-modal'
+  modal.innerHTML=`<div class="modal" style="max-width:440px" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;margin-bottom:20px">
+      <span style="font-size:18px;font-weight:700">Invite ${esc(name)}</span>
+      <button class="ghost sm" onclick="document.getElementById('invite-modal').remove()">✕</button>
+    </div>
+    <div style="margin-bottom:18px">
+      <label class="lbl">Athlete's Email</label>
+      <input id="inv-email" type="email" value="${esc(existingEmail)}" placeholder="athlete@email.com">
+    </div>
+    <div id="inv-err" style="display:none;color:#ff6b6b;font-size:13px;background:#2b0d0d;padding:8px 12px;border-radius:6px;margin-bottom:12px"></div>
+    <div class="row" style="justify-content:flex-end;gap:10px">
+      <button class="ghost" onclick="document.getElementById('invite-modal').remove()">Cancel</button>
+      <button class="btn" id="inv-btn" onclick="doSendInvite('${id}','${esc(name)}')">Send Invite ✉️</button>
+    </div>
+  </div>`
+  document.body.appendChild(modal)
+  modal.onclick=e=>{if(e.target===modal)modal.remove()}
+}
+
+async function doSendInvite(id, name){
+  const email=document.getElementById('inv-email')?.value.trim()
+  const err=document.getElementById('inv-err')
+  const btn=document.getElementById('inv-btn')
+  if(!email){if(err){err.textContent='Please enter an email address.';err.style.display='block'}return}
+  if(btn){btn.textContent='Sending…';btn.disabled=true}
+
+  // Save email to their profile
+  await db.from('profiles').update({pending_email:email}).eq('id',id)
+
+  // Send the magic link invite
+  const {error}=await db.auth.signInWithOtp({
+    email,
+    options:{emailRedirectTo:'https://splitlog.netlify.app'}
+  })
+
+  document.getElementById('invite-modal')?.remove()
+
+  if(error){
+    alert('Could not send invite: '+error.message)
+    return
+  }
+
+  const successModal=document.createElement('div')
+  successModal.className='overlay'
+  successModal.innerHTML=`<div class="modal" style="max-width:420px;text-align:center" onclick="event.stopPropagation()">
+    <div style="font-size:40px;margin-bottom:16px">✉️</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:10px">Invite sent!</div>
+    <p style="color:#6b7280;font-size:14px;margin-bottom:24px;line-height:1.6">An invite has been sent to <strong style="color:#e8e6e0">${esc(email)}</strong>.</p>
+    <button class="btn" style="width:100%" onclick="this.closest('.overlay').remove()">Done</button>
+  </div>`
+  document.body.appendChild(successModal)
+  successModal.onclick=e=>{if(e.target===successModal)successModal.remove()}
 }
 
 // ── REMOVE ATHLETE ──
