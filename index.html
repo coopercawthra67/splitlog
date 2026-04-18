@@ -569,7 +569,7 @@ async function wdetailHTML(){
 
         <div class="row" style="justify-content:flex-end;gap:10px">
           <button class="ghost" onclick="closeModal()">Cancel</button>
-          <button class="btn" onclick="wdSave('${w.id}')">Save Changes</button>
+          <button class="btn" id="btn-wd-save" onclick="wdSave('${w.id}')">Save Changes</button>
         </div>
       </div></div>`
   }
@@ -597,7 +597,7 @@ async function wdetailHTML(){
 async function wdSave(wid){
   const title=document.getElementById('wd-title')?.value.trim()
   if(!title)return
-  const btn=document.querySelector('[onclick="wdSave(''+wid+'')"]')
+  const btn=document.getElementById('btn-wd-save')
   if(btn){btn.textContent='Saving…';btn.disabled=true}
 
   // Save workout fields
