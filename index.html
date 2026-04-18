@@ -219,10 +219,13 @@ async function pgDash(){
 
   // Locations section
   const locCards=(locs||[]).map(l=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#13151a;border:1px solid #2a2e3a;border-radius:10px;margin-bottom:8px">
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#13151a;border:1px solid #2a2e3a;border-radius:10px;margin-bottom:8px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='#c8ff3e'" onmouseout="this.style.borderColor='#2a2e3a'" onclick="openFormAtLocation('${esc(l.name)}')">
       <span style="font-size:18px">📍</span>
-      <span style="flex:1;font-weight:500;font-size:14px">${esc(l.name)}</span>
-      <button onclick="deleteLocation('${l.id}')" style="background:none;border:none;color:#4b5563;font-size:16px;cursor:pointer;padding:2px 6px" onmouseover="this.style.color='#ff4444'" onmouseout="this.style.color='#4b5563'">×</button>
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:14px">${esc(l.name)}</div>
+        <div style="font-size:11px;color:#4b5563;margin-top:2px">Click to log a workout here</div>
+      </div>
+      <button onclick="event.stopPropagation();deleteLocation('${l.id}')" style="background:none;border:none;color:#4b5563;font-size:16px;cursor:pointer;padding:2px 8px" onmouseover="this.style.color='#ff4444'" onmouseout="this.style.color='#4b5563'">×</button>
     </div>`).join('')
 
   return`<div class="page-title">Dashboard</div><div class="page-sub">Welcome, ${esc(APP.profile?.name||'Coach')}</div>
@@ -240,6 +243,11 @@ async function pgDash(){
   </div>
   ${locCards||'<p style="color:#4b5563;font-size:14px;margin-bottom:8px">No locations yet. Add your training spots.</p>'}
   `
+}
+
+function openFormAtLocation(locationName){
+  WF={selIds:[],splits:{},saving:false,prefillLocation:locationName}
+  APP.modal='form';APP.editW=null;render()
 }
 
 function showAddLocation(){
@@ -713,6 +721,19 @@ async function wformHTML(){
     const on=WF.selIds.includes(a.id)
     return`<div class="ath-chip" data-aid="${a.id}" style="display:flex;align-items:center;gap:7px;padding:6px 14px;border-radius:20px;cursor:pointer;border:1px solid ${on?a.color||'#c8ff3e':'#2a2e3a'};background:${on?(a.color||'#c8ff3e')+'18':'transparent'};transition:all .15s"><div style="width:8px;height:8px;border-radius:50%;background:${a.color||'#c8ff3e'}"></div><span style="font-size:13px;color:${on?a.color||'#c8ff3e':'#9ca3af'}">${esc(a.name)}</span></div>`
   }).join('')
+  // Check for shared reps
+  const sharedReps=WF.sharedReps||[]
+  const sharedSection=sharedReps.length>0?`
+    <div style="background:#0d1a00;border:1px solid #1a2600;border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="font-size:12px;color:#4b7a00;font-weight:600;margin-bottom:10px">🔗 Shared Splits (same for all selected athletes)</div>
+      ${sharedReps.map((r,i)=>`<div class="row" style="gap:8px;margin-bottom:6px">
+        <input class="shared-d" data-i="${i}" type="text" placeholder="400m" value="${esc(r.d)}" style="width:110px;flex-shrink:0">
+        <input class="shared-t" data-i="${i}" type="text" placeholder="58.4" value="${esc(r.t)}" style="font-family:monospace">
+        <button onclick="removeSharedRep(${i})" style="background:none;border:none;color:#ff4444;font-size:22px;padding:0 4px;cursor:pointer;flex-shrink:0">×</button>
+      </div>`).join('')}
+      <button class="ghost sm" style="margin-top:4px" onclick="addSharedRep()">+ Add Shared Rep</button>
+    </div>`:'';
+
   const splitsHTML=WF.selIds.map(aid=>{
     const a=(aths||[]).find(x=>x.id===aid)
     const reps=WF.splits[aid]||[{d:'',t:''}]
@@ -741,17 +762,40 @@ async function wformHTML(){
         <div><label class="lbl">Weather</label><input id="wf-wx" type="text" placeholder="Sunny 72°F" value="${esc(ew?.weather||'')}"></div>
       </div>
       <div style="margin-bottom:16px"><label class="lbl">Athletes</label><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:6px" id="ath-chips">${chips}</div></div>
-      <div id="splits-sec" style="margin-bottom:16px">${splitsHTML?`<label class="lbl">Splits / Reps</label>${splitsHTML}`:''}</div>
+      <div id="splits-sec" style="margin-bottom:16px">${WF.selIds.length?`
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <label class="lbl" style="margin-bottom:0">Splits / Reps</label>
+          <button class="ghost sm" onclick="addSharedRep()" style="font-size:11px">+ Add Shared Split (all athletes)</button>
+        </div>
+        ${sharedSection}${splitsHTML}
+      `:''}
+      </div>
       <div style="margin-bottom:18px"><label class="lbl">🔒 Coach Notes (private — athletes never see this)</label><textarea id="wf-notes" placeholder="What would you change next time?" style="min-height:80px">${esc(ew?.coach_notes||'')}</textarea></div>
       <div class="row" style="justify-content:flex-end;gap:10px"><button class="ghost" onclick="closeModal()">Cancel</button><button class="btn" id="btn-save-w" onclick="saveWorkout()">Save Workout</button></div>
     </div></div>`
 }
 
+function addSharedRep(){
+  syncReps()
+  if(!WF.sharedReps) WF.sharedReps=[]
+  WF.sharedReps.push({d:'',t:''})
+  rerenderSplits()
+}
+function removeSharedRep(i){
+  syncReps()
+  if(WF.sharedReps) WF.sharedReps.splice(i,1)
+  rerenderSplits()
+}
+function syncShared(){
+  document.querySelectorAll('.shared-d').forEach(inp=>{const i=+inp.dataset.i;if(WF.sharedReps&&WF.sharedReps[i])WF.sharedReps[i].d=inp.value})
+  document.querySelectorAll('.shared-t').forEach(inp=>{const i=+inp.dataset.i;if(WF.sharedReps&&WF.sharedReps[i])WF.sharedReps[i].t=inp.value})
+}
 function addRep(aid){if(!WF.splits[aid])WF.splits[aid]=[{d:'',t:''}];else WF.splits[aid].push({d:'',t:''});syncReps();rerenderSplits()}
 function removeRep(aid,i){if(WF.splits[aid])WF.splits[aid].splice(i,1);syncReps();rerenderSplits()}
 function syncReps(){
   document.querySelectorAll('.rep-d').forEach(inp=>{const aid=inp.dataset.aid,i=+inp.dataset.i;if(WF.splits[aid])WF.splits[aid][i].d=inp.value})
   document.querySelectorAll('.rep-t').forEach(inp=>{const aid=inp.dataset.aid,i=+inp.dataset.i;if(WF.splits[aid])WF.splits[aid][i].t=inp.value})
+  syncShared()
 }
 function rerenderSplits(){
   const sec=document.getElementById('splits-sec');if(!sec)return
@@ -779,9 +823,16 @@ async function saveWorkout(){
   else{const {data}=await db.from('workouts').insert(w).select().single();wid=data.id}
   if(WF.selIds.length) await db.from('workout_athletes').insert(WF.selIds.map(aid=>({workout_id:wid,athlete_id:aid})))
   const srows=[]
-  WF.selIds.forEach(aid=>{(WF.splits[aid]||[]).forEach((r,i)=>{if(r.d||r.t)srows.push({workout_id:wid,athlete_id:aid,rep_number:i+1,distance:r.d,time:r.t})})})
+  WF.selIds.forEach(aid=>{
+    const indivReps=WF.splits[aid]||[]
+    const sharedReps=WF.sharedReps||[]
+    // Individual reps
+    indivReps.forEach((r,i)=>{if(r.d||r.t)srows.push({workout_id:wid,athlete_id:aid,rep_number:i+1,distance:r.d,time:r.t})})
+    // Shared reps (added after individual, offset rep numbers)
+    sharedReps.forEach((r,i)=>{if(r.d||r.t)srows.push({workout_id:wid,athlete_id:aid,rep_number:indivReps.length+i+1,distance:r.d,time:r.t})})
+  })
   if(srows.length) await db.from('splits').insert(srows)
-  WF={selIds:[],splits:{},saving:false}
+  WF={selIds:[],splits:{},saving:false,sharedReps:[],prefillLocation:''}
   APP.modal=null;APP.editW=null;render()
 }
 
