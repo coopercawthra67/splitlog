@@ -219,13 +219,13 @@ async function pgDash(){
 
   // Locations section
   const locCards=(locs||[]).map(l=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#13151a;border:1px solid #2a2e3a;border-radius:10px;margin-bottom:8px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='#c8ff3e'" onmouseout="this.style.borderColor='#2a2e3a'" onclick="openFormAtLocation('${esc(l.name)}')">
+    <div class="loc-card" data-locname="${esc(l.name)}" data-locid="${l.id}" style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#13151a;border:1px solid #2a2e3a;border-radius:10px;margin-bottom:8px;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='#c8ff3e'" onmouseout="this.style.borderColor='#2a2e3a'">
       <span style="font-size:18px">📍</span>
       <div style="flex:1">
         <div style="font-weight:600;font-size:14px">${esc(l.name)}</div>
         <div style="font-size:11px;color:#4b5563;margin-top:2px">Click to log a workout here</div>
       </div>
-      <button onclick="event.stopPropagation();deleteLocation('${l.id}')" style="background:none;border:none;color:#4b5563;font-size:16px;cursor:pointer;padding:2px 8px" onmouseover="this.style.color='#ff4444'" onmouseout="this.style.color='#4b5563'">×</button>
+      <button class="loc-del-btn" data-locid="${l.id}" style="background:none;border:none;color:#4b5563;font-size:16px;cursor:pointer;padding:2px 8px" onmouseover="this.style.color='#ff4444'" onmouseout="this.style.color='#4b5563'">×</button>
     </div>`).join('')
 
   return`<div class="page-title">Dashboard</div><div class="page-sub">Welcome, ${esc(APP.profile?.name||'Coach')}</div>
@@ -976,6 +976,19 @@ async function createGroup(){
 // ── BIND ALL ──
 function bindAll(){
   bindWdChips()
+  // location cards
+  document.querySelectorAll('.loc-card').forEach(card=>{
+    card.onclick=()=>{
+      const name=card.dataset.locname
+      openFormAtLocation(name)
+    }
+  })
+  document.querySelectorAll('.loc-del-btn').forEach(btn=>{
+    btn.onclick=e=>{
+      e.stopPropagation()
+      deleteLocation(btn.dataset.locid)
+    }
+  })
   // athlete chip toggles in workout form
   bindChips('ath-chips')
   // title autocomplete
