@@ -188,10 +188,10 @@ function closeModal(){APP.modal=null;APP.viewW=null;APP.editW=null;render()}
 
 // ── PAGES ──
 async function pgDash(){
-  const [{data:ws},{data:aths},{data:gs}]=await Promise.all([
-    db.from('workouts').select('*,workout_athletes(athlete_id,profiles(*))').order('date',{ascending:false}).limit(5),
+  const [{data:aths},{data:gs},{data:locs}]=await Promise.all([
     db.from('profiles').select('*').eq('role','athlete'),
-    db.from('groups').select('*,group_members(athlete_id)')
+    db.from('groups').select('*,group_members(athlete_id)'),
+    db.from('locations').select('*').order('name')
   ])
   const {data:waRows}=await db.from('workout_athletes').select('athlete_id,workout_id')
   const {data:allWs}=await db.from('workouts').select('id,date')
@@ -217,6 +217,14 @@ async function pgDash(){
     </div>`
   }).join('')
 
+  // Locations section
+  const locCards=(locs||[]).map(l=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#13151a;border:1px solid #2a2e3a;border-radius:10px;margin-bottom:8px">
+      <span style="font-size:18px">📍</span>
+      <span style="flex:1;font-weight:500;font-size:14px">${esc(l.name)}</span>
+      <button onclick="deleteLocation('${l.id}')" style="background:none;border:none;color:#4b5563;font-size:16px;cursor:pointer;padding:2px 6px" onmouseover="this.style.color='#ff4444'" onmouseout="this.style.color='#4b5563'">×</button>
+    </div>`).join('')
+
   return`<div class="page-title">Dashboard</div><div class="page-sub">Welcome, ${esc(APP.profile?.name||'Coach')}</div>
   <div class="grid4" style="margin-bottom:32px">${stats.map(s=>`<div class="statcard"><div style="font-size:11px;color:#4b5563;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">${s.l}</div><div class="mono" style="font-size:34px;color:${s.c}">${s.v}</div></div>`).join('')}</div>
 
@@ -227,10 +235,48 @@ async function pgDash(){
   ${rosterRows||'<p style="color:#4b5563;font-size:14px;margin-bottom:32px">No athletes yet. Go to Athletes → Add Athlete.</p>'}
 
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;margin-top:28px">
-    <div style="font-size:11px;color:#4b5563;text-transform:uppercase;letter-spacing:.06em">Recent Sessions</div>
-    <button class="ghost sm" onclick="go('workouts')">View all →</button>
+    <div style="font-size:11px;color:#4b5563;text-transform:uppercase;letter-spacing:.06em">Workout Locations</div>
+    <button class="ghost sm" onclick="showAddLocation()">+ Add Location</button>
   </div>
-  ${(ws||[]).map(w=>wcardHTML(w)).join('')||'<p class="empty">No workouts yet. Hit "+ Log Workout" to get started.</p>'}`
+  ${locCards||'<p style="color:#4b5563;font-size:14px;margin-bottom:8px">No locations yet. Add your training spots.</p>'}
+  `
+}
+
+function showAddLocation(){
+  const modal=document.createElement('div')
+  modal.className='overlay'
+  modal.id='add-loc-modal'
+  modal.innerHTML=`<div class="modal" style="max-width:420px" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;margin-bottom:20px">
+      <span style="font-size:18px;font-weight:700">Add Location</span>
+      <button class="ghost sm" onclick="document.getElementById('add-loc-modal').remove()">✕</button>
+    </div>
+    <div style="margin-bottom:18px">
+      <label class="lbl">Location Name</label>
+      <input id="loc-name" type="text" placeholder="e.g. Washington HS Track" autofocus>
+    </div>
+    <div class="row" style="justify-content:flex-end;gap:10px">
+      <button class="ghost" onclick="document.getElementById('add-loc-modal').remove()">Cancel</button>
+      <button class="btn" onclick="saveLocation()">Add Location</button>
+    </div>
+  </div>`
+  document.body.appendChild(modal)
+  modal.onclick=e=>{if(e.target===modal)modal.remove()}
+  setTimeout(()=>document.getElementById('loc-name')?.focus(),50)
+}
+
+async function saveLocation(){
+  const name=document.getElementById('loc-name')?.value.trim()
+  if(!name)return
+  await db.from('locations').insert({name,coach_id:APP.profile.id})
+  document.getElementById('add-loc-modal')?.remove()
+  render()
+}
+
+async function deleteLocation(id){
+  if(!confirm('Remove this location?'))return
+  await db.from('locations').delete().eq('id',id)
+  render()
 }
 
 async function pgWorkouts(){
@@ -439,10 +485,13 @@ async function openDetail(wid){
   APP.viewW=w;APP.modal='detail';render()
 }
 
-// ── WORKOUT DETAIL MODAL ──
+// ── WORKOUT DETAIL MODAL (coaches see full edit, athletes see read-only) ──
 async function wdetailHTML(){
   const w=APP.viewW
   const isCoach=APP.profile?.role==='coach'
+  const {data:allAths}=await db.from('profiles').select('*').eq('role','athlete')
+
+  // Build splits by athlete
   const splitsByAth={}
   const athProfs={}
   ;(w.splits||[]).forEach(sp=>{
@@ -451,30 +500,207 @@ async function wdetailHTML(){
     if(sp.profiles) athProfs[sp.athlete_id]=sp.profiles
   })
   Object.values(splitsByAth).forEach(arr=>arr.sort((a,b)=>(a.rep_number||0)-(b.rep_number||0)))
-  const athIds=Object.keys(splitsByAth).filter(aid=>isCoach||aid===APP.profile?.id)
-  const splitBlocks=athIds.map(aid=>{
-    const reps=splitsByAth[aid]
-    const u=athProfs[aid]
-    const best=bestIdx(reps)
-    const rows=reps.map((r,i)=>`<div class="splitrow"><span style="flex:1;font-size:13px;color:#6b7280">Rep ${r.rep_number} · ${esc(r.distance||'')}</span><span class="mono" style="font-size:16px;color:${i===best?'#c8ff3e':'#e8e6e0'}">${esc(r.time||'')}</span>${i===best?'<span style="margin-left:8px;font-size:10px;color:#c8ff3e;font-weight:700">BEST</span>':''}</div>`).join('')
-    return`<div style="margin-bottom:18px">
-      <div class="row" style="margin-bottom:8px">${av(u,30)}<span style="font-weight:600;margin-left:8px">${esc(u?.name||'?')}</span><span class="badge bb" style="margin-left:auto">${reps.length} reps</span></div>
-      <div style="background:#1c1f27;border-radius:8px;overflow:hidden">${rows}</div></div>`
-  }).join('')
+
+  if(isCoach){
+    // ── COACH: full editable view ──
+    const selIds=w.workout_athletes?.map(wa=>wa.athlete_id)||[]
+
+    const athChips=(allAths||[]).map(a=>{
+      const on=selIds.includes(a.id)
+      return`<div class="wd-chip" data-aid="${a.id}" style="display:flex;align-items:center;gap:7px;padding:5px 12px;border-radius:20px;cursor:pointer;border:1px solid ${on?a.color||'#c8ff3e':'#2a2e3a'};background:${on?(a.color||'#c8ff3e')+'18':'transparent'};font-size:13px;color:${on?a.color||'#c8ff3e':'#9ca3af'}">${esc(a.name)}</div>`
+    }).join('')
+
+    // Build editable splits for each athlete in this workout
+    const splitSecs=selIds.map(aid=>{
+      const a=(allAths||[]).find(x=>x.id===aid)
+      const reps=splitsByAth[aid]||[]
+      const best=bestIdx(reps)
+      const repRows=reps.map((r,i)=>`
+        <div class="row wd-rep-row" data-aid="${aid}" data-rid="${r.id}" style="gap:8px;margin-bottom:6px">
+          <input class="wd-rep-d" type="text" placeholder="400m" value="${esc(r.distance||'')}" style="width:110px;flex-shrink:0;${i===best?'border-color:#c8ff3e':''}" data-aid="${aid}" data-rid="${r.id}">
+          <input class="wd-rep-t" type="text" placeholder="58.4" value="${esc(r.time||'')}" style="font-family:monospace;${i===best?'border-color:#c8ff3e':''}" data-aid="${aid}" data-rid="${r.id}">
+          ${i===best?'<span style="font-size:10px;color:#c8ff3e;font-weight:700;flex-shrink:0">BEST</span>':''}
+          <button onclick="wdRemoveRep('${r.id}','${aid}')" style="background:none;border:none;color:#ff4444;font-size:20px;padding:0 4px;cursor:pointer;flex-shrink:0;margin-left:auto">×</button>
+        </div>`).join('')
+      return`<div style="margin-bottom:18px" id="wd-sec-${aid}">
+        <div class="row" style="margin-bottom:8px">${av(a,30)}<span style="font-weight:600;margin-left:8px">${esc(a?.name||'')}</span><span class="badge bb" style="margin-left:auto">${reps.length} reps</span></div>
+        <div style="background:#1c1f27;border-radius:8px;overflow:hidden;padding:8px 10px" id="wd-reps-${aid}">${repRows}</div>
+        <button class="ghost sm" style="margin-top:8px" onclick="wdAddRep('${w.id}','${aid}')">+ Add Rep</button>
+      </div>`
+    }).join('')
+
+    const typeOpts=WTYPES.map(t=>`<option ${w.type===t?'selected':''}>${t}</option>`).join('')
+    const surfOpts=SURFS.map(s=>`<option ${w.surface===s?'selected':''}>${s}</option>`).join('')
+
+    return`<div class="overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="max-width:720px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+          <span style="font-size:20px;font-weight:800;color:#c8ff3e;font-style:italic">Edit Workout</span>
+          <div class="row" style="gap:8px">
+            <button class="ghost sm" style="color:#ff4444;border-color:#5a1a1a" onclick="confirmDeleteWorkout('${w.id}')">Delete</button>
+            <button class="ghost sm" onclick="closeModal()">✕ Close</button>
+          </div>
+        </div>
+
+        <div class="grid2" style="margin-bottom:16px">
+          <div style="grid-column:1/-1"><label class="lbl">Workout Title</label><input id="wd-title" value="${esc(w.title)}"></div>
+          <div><label class="lbl">Date</label><input id="wd-date" type="date" value="${w.date||''}"></div>
+          <div><label class="lbl">Time</label><input id="wd-time" placeholder="3:30 PM" value="${esc(w.time_of_day||'')}"></div>
+          <div><label class="lbl">Type</label><select id="wd-type">${typeOpts}</select></div>
+          <div><label class="lbl">Surface</label><select id="wd-surf">${surfOpts}</select></div>
+          <div><label class="lbl">Location</label><input id="wd-loc" placeholder="Track, trail…" value="${esc(w.location||'')}"></div>
+          <div><label class="lbl">Weather</label><input id="wd-wx" placeholder="Sunny 72°F" value="${esc(w.weather||'')}"></div>
+        </div>
+
+        <div style="margin-bottom:18px">
+          <label class="lbl">Athletes in this workout</label>
+          <div class="row" style="flex-wrap:wrap;gap:8px;margin-top:8px" id="wd-chips">${athChips}</div>
+        </div>
+
+        <div style="margin-bottom:18px">
+          <label class="lbl">Splits by Athlete</label>
+          <div id="wd-splits-container">${splitSecs||'<p class="muted" style="font-size:13px">Add athletes above to enter splits.</p>'}</div>
+        </div>
+
+        <div style="margin-bottom:18px">
+          <label class="lbl">🔒 Coach Notes (private)</label>
+          <textarea id="wd-notes" style="min-height:80px">${esc(w.coach_notes||'')}</textarea>
+        </div>
+
+        <div class="row" style="justify-content:flex-end;gap:10px">
+          <button class="ghost" onclick="closeModal()">Cancel</button>
+          <button class="btn" onclick="wdSave('${w.id}')">Save Changes</button>
+        </div>
+      </div></div>`
+  }
+
+  // ── ATHLETE: read-only view ──
+  const myReps=splitsByAth[APP.profile?.id]||[]
+  const best=bestIdx(myReps)
+  const rows=myReps.map((r,i)=>`<div class="splitrow"><span style="flex:1;font-size:13px;color:#6b7280">Rep ${r.rep_number} · ${esc(r.distance||'')}</span><span class="mono" style="font-size:16px;color:${i===best?'#c8ff3e':'#e8e6e0'}">${esc(r.time||'')}</span>${i===best?'<span style="margin-left:8px;font-size:10px;color:#c8ff3e;font-weight:700">BEST</span>':''}</div>`).join('')
   return`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal" style="max-width:660px">
+    <div class="modal" style="max-width:600px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
-        <div><div style="font-size:22px;font-weight:700;margin-bottom:10px">${esc(w.title)}</div>
-          <div class="row" style="flex-wrap:wrap;gap:8px"><span class="badge ba">${esc(w.type)}</span><span class="muted">${fmtDate(w.date)}</span>${w.time_of_day?`<span class="muted">· ${esc(w.time_of_day)}</span>`:''}<span style="font-size:16px">${wicon(w.weather)}</span>${w.weather?`<span class="muted">${esc(w.weather)}</span>`:''}</div>
+        <div><div style="font-size:22px;font-weight:700;margin-bottom:8px">${esc(w.title)}</div>
+          <div class="row" style="flex-wrap:wrap;gap:8px"><span class="badge ba">${esc(w.type)}</span><span class="muted">${fmtDate(w.date)}</span>${w.time_of_day?`<span class="muted">· ${esc(w.time_of_day)}</span>`:''}<span style="font-size:15px">${wicon(w.weather)}</span></div>
         </div><button class="ghost sm" onclick="closeModal()">✕ Close</button>
       </div>
       <div class="grid2" style="margin-bottom:18px">
         ${[['Location',w.location||'—'],['Surface',w.surface||'—']].map(([k,v])=>`<div style="background:#1c1f27;border-radius:8px;padding:10px 14px"><div style="font-size:10px;color:#4b5563;margin-bottom:3px;text-transform:uppercase">${k}</div><div style="font-size:14px">${esc(v)}</div></div>`).join('')}
       </div>
-      <div class="lbl" style="margin-bottom:12px">Athletes & Splits</div>
-      ${splitBlocks||'<p class="muted">No splits recorded.</p>'}
-      ${isCoach&&w.coach_notes?`<div style="background:#0d1a00;border:1px solid #1a2600;border-radius:10px;padding:14px 16px;margin-top:8px"><div style="font-size:11px;color:#4b7a00;margin-bottom:6px">🔒 Coach Notes (Private)</div><p style="font-size:14px;color:#9ca3af;line-height:1.7">${esc(w.coach_notes)}</p></div>`:''}
+      <div class="lbl" style="margin-bottom:10px">My Splits</div>
+      ${rows?`<div style="background:#1c1f27;border-radius:8px;overflow:hidden">${rows}</div>`:'<p class="muted">No splits recorded yet.</p>'}
     </div></div>`
+}
+
+// ── WORKOUT DETAIL EDIT HELPERS ──
+async function wdSave(wid){
+  const title=document.getElementById('wd-title')?.value.trim()
+  if(!title)return
+  const btn=document.querySelector('[onclick="wdSave(''+wid+'')"]')
+  if(btn){btn.textContent='Saving…';btn.disabled=true}
+
+  // Save workout fields
+  await db.from('workouts').update({
+    title,
+    type:document.getElementById('wd-type')?.value,
+    date:document.getElementById('wd-date')?.value,
+    time_of_day:document.getElementById('wd-time')?.value,
+    location:document.getElementById('wd-loc')?.value,
+    surface:document.getElementById('wd-surf')?.value,
+    weather:document.getElementById('wd-wx')?.value,
+    coach_notes:document.getElementById('wd-notes')?.value
+  }).eq('id',wid)
+
+  // Save athlete selections
+  const chips=[...document.querySelectorAll('#wd-chips .wd-chip')]
+  const selIds=chips.filter(c=>c.classList.contains('sel')||c.style.background.includes('18')).map(c=>c.dataset.aid)
+  await db.from('workout_athletes').delete().eq('workout_id',wid)
+  if(selIds.length) await db.from('workout_athletes').insert(selIds.map(aid=>({workout_id:wid,athlete_id:aid})))
+
+  // Save splits — update existing ones
+  document.querySelectorAll('.wd-rep-d').forEach(inp=>{
+    const rid=inp.dataset.rid
+    const t=document.querySelector(`.wd-rep-t[data-rid="${rid}"]`)?.value||''
+    if(rid) db.from('splits').update({distance:inp.value,time:t}).eq('id',rid)
+  })
+
+  closeModal()
+  render()
+}
+
+async function wdAddRep(wid, aid){
+  const container=document.getElementById(`wd-reps-${aid}`)
+  if(!container)return
+  const existing=container.querySelectorAll('.wd-rep-row').length
+  const {data:newRep}=await db.from('splits').insert({workout_id:wid,athlete_id:aid,rep_number:existing+1,distance:'',time:''}).select().single()
+  if(newRep){
+    const row=document.createElement('div')
+    row.className='row wd-rep-row'
+    row.dataset.aid=aid
+    row.dataset.rid=newRep.id
+    row.style.cssText='gap:8px;margin-bottom:6px'
+    row.innerHTML=`<input class="wd-rep-d" type="text" placeholder="400m" value="" style="width:110px;flex-shrink:0" data-aid="${aid}" data-rid="${newRep.id}"><input class="wd-rep-t" type="text" placeholder="58.4" value="" style="font-family:monospace" data-aid="${aid}" data-rid="${newRep.id}"><button onclick="wdRemoveRep('${newRep.id}','${aid}')" style="background:none;border:none;color:#ff4444;font-size:20px;padding:0 4px;cursor:pointer;flex-shrink:0;margin-left:auto">×</button>`
+    container.appendChild(row)
+    // Update rep count badge
+    const badge=document.querySelector(`#wd-sec-${aid} .badge`)
+    if(badge) badge.textContent=(existing+1)+' reps'
+  }
+}
+
+async function wdRemoveRep(rid, aid){
+  await db.from('splits').delete().eq('id',rid)
+  const row=document.querySelector(`.wd-rep-row[data-rid="${rid}"]`)
+  if(row) row.remove()
+  // Update badge
+  const container=document.getElementById(`wd-reps-${aid}`)
+  if(container){
+    const count=container.querySelectorAll('.wd-rep-row').length
+    const badge=document.querySelector(`#wd-sec-${aid} .badge`)
+    if(badge) badge.textContent=count+' reps'
+  }
+}
+
+async function confirmDeleteWorkout(wid){
+  if(!confirm('Delete this workout and all its splits? This cannot be undone.')) return
+  await db.from('splits').delete().eq('workout_id',wid)
+  await db.from('workout_athletes').delete().eq('workout_id',wid)
+  await db.from('workouts').delete().eq('id',wid)
+  closeModal()
+  render()
+}
+
+// bind wd chips after render
+function bindWdChips(){
+  document.querySelectorAll('#wd-chips .wd-chip').forEach(chip=>{
+    const aid=chip.dataset.aid
+    const isOn=chip.style.background.includes('18')
+    chip.onclick=async()=>{
+      const nowOn=chip.style.background.includes('18')
+      if(nowOn){
+        chip.style.background='transparent'
+        chip.style.borderColor='#2a2e3a'
+        chip.style.color='#9ca3af'
+        // Remove splits section
+        document.getElementById('wd-sec-'+aid)?.remove()
+      } else {
+        const {data:allAths}=await db.from('profiles').select('*').eq('id',aid).single()
+        const c=allAths?.color||'#c8ff3e'
+        chip.style.background=c+'18'
+        chip.style.borderColor=c
+        chip.style.color=c
+        // Add splits section for this athlete
+        const container=document.getElementById('wd-splits-container')
+        if(container){
+          const sec=document.createElement('div')
+          sec.id='wd-sec-'+aid
+          sec.style.marginBottom='18px'
+          sec.innerHTML=`<div class="row" style="margin-bottom:8px">${av(allAths,30)}<span style="font-weight:600;margin-left:8px">${esc(allAths?.name||'')}</span><span class="badge bb" style="margin-left:auto">0 reps</span></div><div style="background:#1c1f27;border-radius:8px;overflow:hidden;padding:8px 10px" id="wd-reps-${aid}"></div><button class="ghost sm" style="margin-top:8px" onclick="wdAddRep('${APP.viewW?.id}','${aid}')">+ Add Rep</button>`
+          container.appendChild(sec)
+        }
+      }
+    }
+  })
 }
 
 // ── WORKOUT FORM ──
@@ -508,7 +734,10 @@ async function wformHTML(){
         <div><label class="lbl">Time</label><input id="wf-time" type="text" placeholder="3:30 PM" value="${esc(ew?.time_of_day||'')}"></div>
         <div><label class="lbl">Type</label><select id="wf-type">${typeOpts}</select></div>
         <div><label class="lbl">Surface</label><select id="wf-surf">${surfOpts}</select></div>
-        <div><label class="lbl">Location</label><input id="wf-loc" type="text" placeholder="Track, trail…" value="${esc(ew?.location||'')}"></div>
+        <div><label class="lbl">Location</label>
+          <input id="wf-loc" type="text" placeholder="Track, trail…" value="${esc(ew?.location||'')}" list="loc-list">
+          <datalist id="loc-list">${(await db.from('locations').select('name')).data?.map(l=>`<option value="${esc(l.name)}">`).join('')||''}</datalist>
+        </div>
         <div><label class="lbl">Weather</label><input id="wf-wx" type="text" placeholder="Sunny 72°F" value="${esc(ew?.weather||'')}"></div>
       </div>
       <div style="margin-bottom:16px"><label class="lbl">Athletes</label><div class="row" style="flex-wrap:wrap;gap:8px;margin-top:6px" id="ath-chips">${chips}</div></div>
@@ -695,6 +924,7 @@ async function createGroup(){
 
 // ── BIND ALL ──
 function bindAll(){
+  bindWdChips()
   // athlete chip toggles in workout form
   bindChips('ath-chips')
   // title autocomplete
